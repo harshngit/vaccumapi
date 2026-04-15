@@ -1,11 +1,14 @@
 {
-  "name": "project-api",
+  "name": "vaccumapi",
   "version": "1.0.0",
-  "description": "Node.js + Express + PostgreSQL REST API",
+  "description": "Vaccum REST API - Node.js + Express + PostgreSQL",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
