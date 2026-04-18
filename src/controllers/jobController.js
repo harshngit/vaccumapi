@@ -12,6 +12,8 @@ const {
   isValidStatusTransition,
   JOB_STATUS_TRANSITIONS,
 } = require('../utils/validators');
+const { notify } = require('./notificationController');
+const wsManager  = require('../config/websocketManager');
 
 // ─── Helper: generate next job ID ────────────────────────────
 const generateJobId = async (client) => {
@@ -200,6 +202,17 @@ const createJob = async (req, res) => {
     );
 
     await dbClient.query('COMMIT');
+
+    // ── Fire real-time notification: job_raised ───────────
+    const clientName = clientCheck.rows[0]?.name || 'Unknown Client';
+    await notify({
+      event:       'job_raised',
+      title:       'New Job Raised',
+      message:     `${jobId} — ${title.trim()} (${clientName})`,
+      entity_type: 'job',
+      entity_id:   jobId,
+      roles:       ['admin', 'manager', 'engineer'],
+    }, wsManager);
 
     return res.status(201).json({
       success: true,
@@ -409,6 +422,37 @@ const updateJobStatus = async (req, res) => {
     }
 
     await dbClient.query('COMMIT');
+
+    // ── Fire real-time notification: job_status ───────────
+    const statusTitle =
+      status === 'Closed' ? 'Job Closed' :
+      status === 'In Progress' ? 'Job In Progress' :
+      status === 'Assigned' ? 'Job Assigned' : 'Job Status Updated';
+    await notify({
+      event:       'job_status',
+      title:       statusTitle,
+      message:     `${id} moved to "${status}"`,
+      entity_type: 'job',
+      entity_id:   id,
+      roles:       ['admin', 'manager', 'engineer'],
+    }, wsManager);
+
+    // Also notify the assigned technician if closing
+    if (status === 'Closed' && job.technician_id) {
+      const techUserRes = await pool.query(
+        'SELECT user_id FROM technicians WHERE id = $1', [job.technician_id]
+      );
+      if (techUserRes.rows[0]?.user_id) {
+        await notify({
+          event:       'job_status',
+          title:       'Your Job Was Closed',
+          message:     `${id} has been marked as Closed`,
+          entity_type: 'job',
+          entity_id:   id,
+          user_id:     techUserRes.rows[0].user_id,
+        }, wsManager);
+      }
+    }
 
     return res.status(200).json({
       success: true,

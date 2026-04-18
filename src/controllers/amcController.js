@@ -4,6 +4,8 @@
 
 const pool = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
+const { notify } = require('./notificationController');
+const wsManager  = require('../config/websocketManager');
 const ERROR_CODES = require('../utils/errorCodes');
 
 // ─── Helper: compute AMC status from dates ───────────────────
@@ -164,9 +166,19 @@ const createAmcContract = async (req, res) => {
 
     await dbClient.query('COMMIT');
 
-    contract.services   = services;
+    contract.services    = services;
     contract.client_name = clientCheck.rows[0].name;
-    contract.days_left  = Math.ceil((new Date(end_date) - new Date()) / (1000 * 60 * 60 * 24));
+    contract.days_left   = Math.ceil((new Date(end_date) - new Date()) / (1000 * 60 * 60 * 24));
+
+    // ── Fire real-time notification: amc_created ──────────
+    await notify({
+      event:       'amc_created',
+      title:       'New AMC Contract Created',
+      message:     `${amcId} — ${title.trim()} for ${contract.client_name}`,
+      entity_type: 'amc',
+      entity_id:   amcId,
+      roles:       ['admin', 'manager'],
+    }, wsManager);
 
     return res.status(201).json({
       success: true,

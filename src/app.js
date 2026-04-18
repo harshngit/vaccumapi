@@ -6,16 +6,17 @@ const swaggerSpec  = require('./config/swagger');
 const { sendError } = require('./utils/AppError');
 const ERROR_CODES   = require('./utils/errorCodes');
 
-const authRoutes        = require('./routes/authRoutes');
-const userRoutes        = require('./routes/userRoutes');
-const technicianRoutes  = require('./routes/technicianRoutes');
-const clientRoutes      = require('./routes/clientRoutes');
-const jobRoutes         = require('./routes/jobRoutes');
-const reportRoutes      = require('./routes/reportRoutes');
-const amcRoutes         = require('./routes/amcRoutes');
-const emailRoutes       = require('./routes/emailRoutes');
-const uploadRoutes      = require('./routes/uploadRoutes');
-const dashboardRoutes   = require('./routes/dashboardRoutes');
+const authRoutes          = require('./routes/authRoutes');
+const userRoutes          = require('./routes/userRoutes');
+const technicianRoutes    = require('./routes/technicianRoutes');
+const clientRoutes        = require('./routes/clientRoutes');
+const jobRoutes           = require('./routes/jobRoutes');
+const reportRoutes        = require('./routes/reportRoutes');
+const amcRoutes           = require('./routes/amcRoutes');
+const emailRoutes         = require('./routes/emailRoutes');
+const uploadRoutes        = require('./routes/uploadRoutes');
+const dashboardRoutes     = require('./routes/dashboardRoutes');
+const notificationRoutes  = require('./routes/notificationRoutes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/amc',            amcRoutes);
 app.use('/api/email-settings', emailRoutes);
 app.use('/api/upload',         uploadRoutes);
 app.use('/api/dashboard',      dashboardRoutes);
+app.use('/api/notifications',  notificationRoutes);
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {

@@ -6,6 +6,8 @@ const pool = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
 const { isValidReportStatus } = require('../utils/validators');
+const { notify } = require('./notificationController');
+const wsManager  = require('../config/websocketManager');
 
 // ─── Helper: generate next report ID ─────────────────────────
 const generateReportId = async (client) => {
@@ -139,6 +141,16 @@ const createReport = async (req, res) => {
 
     await dbClient.query('COMMIT');
 
+    // ── Fire real-time notification: report_submitted ─────
+    await notify({
+      event:       'report_submitted',
+      title:       'New Report Submitted',
+      message:     `${reportId} — ${title.trim()} (Job: ${job_id})`,
+      entity_type: 'report',
+      entity_id:   reportId,
+      roles:       ['admin', 'manager'],
+    }, wsManager);
+
     return res.status(201).json({
       success: true,
       message: `Report ${reportId} submitted successfully.`,
@@ -234,6 +246,23 @@ const updateReportStatus = async (req, res) => {
        RETURNING id, status, approved_by_user_id, approved_at`,
       [status, req.user.id, id]
     );
+
+    // ── Fire real-time notification: report_reviewed ────────
+    // Notify the technician who submitted the report
+    const techUserRes = await pool.query(
+      'SELECT t.user_id FROM technicians t JOIN reports r ON r.technician_id = t.id WHERE r.id = $1',
+      [id]
+    );
+    if (techUserRes.rows[0]?.user_id) {
+      await notify({
+        event:       'report_reviewed',
+        title:       `Report ${status}`,
+        message:     `Your report ${id} was ${status.toLowerCase()} by admin`,
+        entity_type: 'report',
+        entity_id:   id,
+        user_id:     techUserRes.rows[0].user_id,
+      }, wsManager);
+    }
 
     return res.status(200).json({
       success: true,

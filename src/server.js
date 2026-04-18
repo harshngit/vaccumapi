@@ -5,7 +5,8 @@
 require('dotenv').config();
 const http = require('http');
 const app  = require('./app');
-const { initWebSocket } = require('./config/websocketManager');
+const { initWebSocket }    = require('./config/websocketManager');
+const { startAmcExpiryJob } = require('./jobs/amcExpiryJob');
 
 const PORT = process.env.PORT || 3000;
 
@@ -14,6 +15,10 @@ const server = http.createServer(app);
 
 // ─── Attach WebSocket server ──────────────────────────────────
 initWebSocket(server);
+
+// ─── Start AMC expiry notification cron ──────────────────────
+// Fires amc_expiring notifications once at startup, then daily.
+startAmcExpiryJob();
 
 // ─── Start listening ──────────────────────────────────────────
 server.listen(PORT, () => {

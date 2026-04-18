@@ -1,13 +1,16 @@
 -- ============================================================
 -- FILE: db/migrations/001_add_missing_columns.sql
--- Run this ONCE on your existing database to add columns
--- that are missing from the original init.sql schema.
--- Safe to run — uses IF NOT EXISTS / DO blocks to skip
--- if columns already exist.
+-- Run this ONCE on your existing database.
+-- Safe to re-run — all blocks check before altering.
 -- ============================================================
 
+-- ─── STEP 1: Enable pg_trgm extension ────────────────────────
+-- This is the fix for: operator class "gin_trgm_ops" does not exist
+-- Must be enabled BEFORE creating any GIN trgm indexes.
 
--- ─── users: add last_login_at ────────────────────────────────
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- ─── STEP 2: Add last_login_at to users ──────────────────────
 
 DO $$
 BEGIN
@@ -22,10 +25,7 @@ BEGIN
   END IF;
 END $$;
 
-
--- ─── users: add technician to user_role enum ─────────────────
--- Your original enum was: admin, engineer, labour, manager
--- The new code also uses 'technician' as a role value.
+-- ─── STEP 3: Add technician to user_role enum ────────────────
 
 DO $$
 BEGIN
@@ -41,10 +41,23 @@ BEGIN
   END IF;
 END $$;
 
+-- ─── STEP 4: Create set_updated_at() function if missing ─────
+-- Some existing databases may not have this from init.sql
 
--- ─── Verify ──────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-SELECT column_name, data_type, is_nullable
+-- ─── STEP 5: Verify ──────────────────────────────────────────
+
+SELECT
+  column_name,
+  data_type,
+  is_nullable
 FROM information_schema.columns
 WHERE table_name = 'users'
 ORDER BY ordinal_position;
