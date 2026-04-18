@@ -114,24 +114,7 @@ router.get('/', protect, authorize('admin', 'manager'), getUsers);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               first_name:
- *                 type: string
- *                 example: John
- *               last_name:
- *                 type: string
- *                 example: Doe
- *               phone_number:
- *                 type: string
- *                 example: "+911234567890"
- *               role:
- *                 type: string
- *                 enum: [admin, engineer, labour, manager]
- *                 description: Admin only
- *               is_active:
- *                 type: boolean
- *                 description: Admin only
+ *             $ref: '#/components/schemas/UpdateUserRequest'
  *     responses:
  *       200:
  *         description: User updated successfully
