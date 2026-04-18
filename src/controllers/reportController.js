@@ -8,6 +8,7 @@ const ERROR_CODES = require('../utils/errorCodes');
 const { isValidReportStatus } = require('../utils/validators');
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
+const { logActivity } = require('./activityController');
 
 // ─── Helper: generate next report ID ─────────────────────────
 const generateReportId = async (client) => {
@@ -151,6 +152,14 @@ const createReport = async (req, res) => {
       roles:       ['admin', 'manager'],
     }, wsManager);
 
+    await logActivity({
+      type:         'report',
+      action:       `Report ${reportId} submitted — ${title.trim()} (Job: ${job_id})`,
+      entity_type:  'report',
+      entity_id:    reportId,
+      performed_by: req.user.id,
+    });
+
     return res.status(201).json({
       success: true,
       message: `Report ${reportId} submitted successfully.`,
@@ -263,6 +272,14 @@ const updateReportStatus = async (req, res) => {
         user_id:     techUserRes.rows[0].user_id,
       }, wsManager);
     }
+
+    await logActivity({
+      type:         'report',
+      action:       `Report ${id} ${status.toLowerCase()} by admin`,
+      entity_type:  'report',
+      entity_id:    id,
+      performed_by: req.user.id,
+    });
 
     return res.status(200).json({
       success: true,

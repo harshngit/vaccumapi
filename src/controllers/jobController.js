@@ -14,6 +14,7 @@ const {
 } = require('../utils/validators');
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
+const { logActivity } = require('./activityController');
 
 // ─── Helper: generate next job ID ────────────────────────────
 const generateJobId = async (client) => {
@@ -213,6 +214,15 @@ const createJob = async (req, res) => {
       entity_id:   jobId,
       roles:       ['admin', 'manager', 'engineer'],
     }, wsManager);
+
+    // ── Activity log ──────────────────────────────────────
+    await logActivity({
+      type:         'job',
+      action:       `Job ${jobId} raised — ${title.trim()} (${clientName})`,
+      entity_type:  'job',
+      entity_id:    jobId,
+      performed_by: req.user.id,
+    });
 
     return res.status(201).json({
       success: true,
@@ -453,6 +463,15 @@ const updateJobStatus = async (req, res) => {
         }, wsManager);
       }
     }
+
+    // ── Activity log ──────────────────────────────────────
+    await logActivity({
+      type:         'job',
+      action:       `Job ${id} status changed to "${status}"`,
+      entity_type:  'job',
+      entity_id:    id,
+      performed_by: req.user.id,
+    });
 
     return res.status(200).json({
       success: true,

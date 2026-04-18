@@ -2,6 +2,7 @@ const pool    = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
 const { isValidPhone, isValidRole } = require('../utils/validators');
+const { logActivity } = require('./activityController');
 
 // ────────────────────────────────────────────────────────────
 // GET /api/users
@@ -144,6 +145,14 @@ const updateUser = async (req, res) => {
       [newFirstName, newLastName, newPhone, newRole, newIsActive, userId]
     );
 
+    await logActivity({
+      type:         'user',
+      action:       `User "${result.rows[0].first_name} ${result.rows[0].last_name}" updated`,
+      entity_type:  'user',
+      entity_id:    String(userId),
+      performed_by: req.user.id,
+    });
+
     return res.status(200).json({
       success: true,
       message: 'User updated successfully.',
@@ -186,6 +195,14 @@ const deleteUser = async (req, res) => {
       'UPDATE users SET is_active = FALSE WHERE id = $1 RETURNING id, email, first_name, last_name, role',
       [userId]
     );
+
+    await logActivity({
+      type:         'user',
+      action:       `User "${result.rows[0].first_name} ${result.rows[0].last_name}" deactivated`,
+      entity_type:  'user',
+      entity_id:    String(userId),
+      performed_by: req.user.id,
+    });
 
     return res.status(200).json({
       success: true,

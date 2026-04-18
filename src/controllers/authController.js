@@ -81,6 +81,14 @@ const register = async (req, res) => {
     const user  = result.rows[0];
     const token = generateToken(user.id);
 
+    await logActivity({
+      type:         'user',
+      action:       `New user registered: ${user.first_name} ${user.last_name} (${user.role})`,
+      entity_type:  'user',
+      entity_id:    String(user.id),
+      performed_by: user.id,
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Account created successfully. Welcome!',
@@ -140,6 +148,14 @@ const login = async (req, res) => {
     if (!isPasswordValid) return Errors.invalidCredentials(res);
 
     const token = generateToken(user.id);
+
+    await logActivity({
+      type:         'auth',
+      action:       `User "${user.first_name} ${user.last_name}" logged in`,
+      entity_type:  'user',
+      entity_id:    String(user.id),
+      performed_by: user.id,
+    });
 
     return res.status(200).json({
       success: true,

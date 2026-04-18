@@ -6,6 +6,7 @@ const pool    = require('../config/db');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { sendError, Errors } = require('../utils/AppError');
+const { logActivity } = require('./activityController');
 const ERROR_CODES = require('../utils/errorCodes');
 const {
   isValidEmail,
@@ -245,6 +246,14 @@ const createTechnician = async (req, res) => {
 
     await client.query('COMMIT');
 
+    await logActivity({
+      type:         'technician',
+      action:       `Technician "${name}" added`,
+      entity_type:  'technician',
+      entity_id:    String(techResult.rows[0].id),
+      performed_by: req.user.id,
+    });
+
     return res.status(201).json({
       success: true,
       message: `Technician ${name} added successfully.`,
@@ -358,6 +367,14 @@ const updateTechnician = async (req, res) => {
       [newName, newEmail, newPhone, newSpecialization, newStatus, newJoinDate, newAvatar, id]
     );
 
+    await logActivity({
+      type:         'technician',
+      action:       `Technician "${newName}" updated`,
+      entity_type:  'technician',
+      entity_id:    String(id),
+      performed_by: req.user.id,
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Technician updated successfully.',
@@ -397,6 +414,14 @@ const deleteTechnician = async (req, res) => {
     }
 
     await pool.query('DELETE FROM technicians WHERE id = $1', [id]);
+
+    await logActivity({
+      type:         'technician',
+      action:       `Technician "${existCheck.rows[0].name}" deleted`,
+      entity_type:  'technician',
+      entity_id:    String(techId),
+      performed_by: req.user.id,
+    });
 
     return res.status(200).json({
       success: true,

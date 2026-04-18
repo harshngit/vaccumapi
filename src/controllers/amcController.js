@@ -6,6 +6,7 @@ const pool = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
+const { logActivity } = require('./activityController');
 const ERROR_CODES = require('../utils/errorCodes');
 
 // ─── Helper: compute AMC status from dates ───────────────────
@@ -180,6 +181,14 @@ const createAmcContract = async (req, res) => {
       roles:       ['admin', 'manager'],
     }, wsManager);
 
+    await logActivity({
+      type:         'amc',
+      action:       `AMC ${amcId} created — ${title.trim()} for ${contract.client_name}`,
+      entity_type:  'amc',
+      entity_id:    amcId,
+      performed_by: req.user.id,
+    });
+
     return res.status(201).json({
       success: true,
       message: `AMC contract ${amcId} created for ${contract.client_name}.`,
@@ -329,6 +338,14 @@ const updateAmcContract = async (req, res) => {
     );
     updated.services = svc.rows.map(r => r.service_name);
 
+    await logActivity({
+      type:         'amc',
+      action:       `AMC ${id} updated`,
+      entity_type:  'amc',
+      entity_id:    id,
+      performed_by: req.user.id,
+    });
+
     return res.status(200).json({
       success: true,
       message: 'AMC contract updated successfully.',
@@ -358,6 +375,14 @@ const deleteAmcContract = async (req, res) => {
 
     // amc_services will cascade delete automatically
     await pool.query('DELETE FROM amc_contracts WHERE id = $1', [id]);
+
+    await logActivity({
+      type:         'amc',
+      action:       `AMC ${id} deleted — ${existCheck.rows[0].title}`,
+      entity_type:  'amc',
+      entity_id:    id,
+      performed_by: req.user.id,
+    });
 
     return res.status(200).json({
       success: true,

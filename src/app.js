@@ -17,6 +17,7 @@ const emailRoutes         = require('./routes/emailRoutes');
 const uploadRoutes        = require('./routes/uploadRoutes');
 const dashboardRoutes     = require('./routes/dashboardRoutes');
 const notificationRoutes  = require('./routes/notificationRoutes');
+const activityRoutes      = require('./routes/activityRoutes');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/email-settings', emailRoutes);
 app.use('/api/upload',         uploadRoutes);
 app.use('/api/dashboard',      dashboardRoutes);
 app.use('/api/notifications',  notificationRoutes);
+app.use('/api/activity',       activityRoutes);
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {
