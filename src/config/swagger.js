@@ -24,7 +24,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
       `,
     },
     servers: [
-      { url: 'https://vaccumapi-production.up.railway.app', description: '🚀 Production (Railway)' },
+      { url: 'https://vaccumapi.onrender.com/', description: '🚀 Production (Render)' },
       { url: 'http://localhost:3000',                        description: '💻 Local Dev' },
     ],
     components: {
