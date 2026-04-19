@@ -4,6 +4,7 @@ const pool      = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
 const { isValidEmail, isValidPhone, isValidRole } = require('../utils/validators');
+const { logActivity } = require('./activityController');
 
 const generateToken = (userId) =>
   jwt.sign({ id: userId }, process.env.JWT_SECRET, {
