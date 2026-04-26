@@ -9,6 +9,7 @@ const { isValidReportStatus } = require('../utils/validators');
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
 const { logActivity } = require('./activityController');
+const { sendNotification, buildTransporterFromEnv } = require('./emailController');
 
 // ─── Helper: generate next report ID ─────────────────────────
 const generateReportId = async (client) => {
@@ -20,6 +21,169 @@ const generateReportId = async (client) => {
   return `RPT-${String(lastNum + 1).padStart(4, '0')}`;
 };
 
+// ─── Helper: build nice HTML report email ────────────────────
+const buildReportEmailHtml = (report, technicalFiles = []) => {
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+  const technicalSection = technicalFiles.length > 0 ? `
+    <tr>
+      <td style="padding:14px 20px;border-bottom:1px solid #f0f0f0;">
+        <strong style="color:#374151;">Attached Technical Reports</strong><br/>
+        <ul style="margin:8px 0 0 0;padding-left:18px;">
+          ${technicalFiles.map(f => `<li><a href="${f.file_url}" style="color:#2563eb;">${f.file_name}</a></li>`).join('')}
+        </ul>
+      </td>
+    </tr>` : '';
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:30px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0"
+             style="background:#ffffff;border-radius:10px;overflow:hidden;
+                    box-shadow:0 4px 20px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%);
+                     padding:32px 40px;text-align:center;">
+            <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;
+                       letter-spacing:0.5px;">
+              ⚙️ Electromech Engineering
+            </h1>
+            <p style="color:#bfdbfe;margin:6px 0 0;font-size:14px;">
+              Service Report Notification
+            </p>
+          </td>
+        </tr>
+
+        <!-- Greeting -->
+        <tr>
+          <td style="padding:28px 40px 10px;">
+            <p style="color:#111827;font-size:16px;margin:0;">
+              Dear <strong>${report.client_name || 'Valued Client'}</strong>,
+            </p>
+            <p style="color:#4b5563;font-size:14px;line-height:1.7;margin:12px 0 0;">
+              We are pleased to inform you that a service has been completed at your premises.
+              Please find the full service report details below.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Report Details Table -->
+        <tr>
+          <td style="padding:20px 40px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                   style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+              <tr style="background:#eff6ff;">
+                <td colspan="2" style="padding:12px 20px;">
+                  <strong style="color:#1e40af;font-size:15px;">
+                    📋 Report ID: ${report.id}
+                  </strong>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           width:40%;color:#6b7280;font-size:13px;">Report Title</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#111827;font-size:14px;font-weight:600;">${report.title}</td>
+              </tr>
+              ${report.po_number ? `
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;">PO Number</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#111827;font-size:14px;">${report.po_number}</td>
+              </tr>` : ''}
+              ${report.location ? `
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;">Location</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#111827;font-size:14px;">${report.location}</td>
+              </tr>` : ''}
+              ${report.serial_no ? `
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;">Serial No.</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#111827;font-size:14px;">${report.serial_no}</td>
+              </tr>` : ''}
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;">Service Date</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#111827;font-size:14px;">${formatDate(report.report_date)}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;">Technician</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#111827;font-size:14px;">${report.technician_name || '—'}</td>
+              </tr>
+              ${report.findings ? `
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;vertical-align:top;">Findings</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#374151;font-size:14px;line-height:1.6;">${report.findings.replace(/\n/g, '<br/>')}</td>
+              </tr>` : ''}
+              ${report.recommendations ? `
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;vertical-align:top;">Recommendations</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#374151;font-size:14px;line-height:1.6;">${report.recommendations.replace(/\n/g, '<br/>')}</td>
+              </tr>` : ''}
+              ${report.comments ? `
+              <tr>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#6b7280;font-size:13px;vertical-align:top;">Comments</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;
+                           color:#374151;font-size:14px;line-height:1.6;">${report.comments.replace(/\n/g, '<br/>')}</td>
+              </tr>` : ''}
+              ${technicalSection}
+            </table>
+          </td>
+        </tr>
+
+        <!-- Status Badge -->
+        <tr>
+          <td style="padding:0 40px 20px;">
+            <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;
+                        padding:12px 16px;display:inline-block;">
+              <span style="color:#92400e;font-size:13px;">
+                ⏳ <strong>Status:</strong> This report is currently under review by our team.
+              </span>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;padding:24px 40px;border-top:1px solid #e5e7eb;">
+            <p style="color:#6b7280;font-size:13px;margin:0 0 8px;">
+              If you have any questions regarding this service report, please contact us.
+            </p>
+            <p style="color:#374151;font-size:13px;margin:0;font-weight:600;">
+              Electromech Engineering Team
+            </p>
+            <p style="color:#9ca3af;font-size:11px;margin:12px 0 0;">
+              This is an automated notification. Please do not reply directly to this email.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+};
+
 // ────────────────────────────────────────────────────────────
 // GET /api/reports
 // ────────────────────────────────────────────────────────────
@@ -28,7 +192,7 @@ const getReports = async (req, res) => {
     const page   = Math.max(1, parseInt(req.query.page)  || 1);
     const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
     const offset = (page - 1) * limit;
-    const { status, technician_id, job_id, from_date, to_date } = req.query;
+    const { status, technician_id, job_id, from_date, to_date, client_id, po_number } = req.query;
 
     if (status && !['Pending', 'Approved', 'Rejected'].includes(status)) {
       return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS,
@@ -49,6 +213,14 @@ const getReports = async (req, res) => {
     if (job_id) {
       values.push(job_id);
       conditions.push(`r.job_id = $${values.length}`);
+    }
+    if (client_id) {
+      values.push(parseInt(client_id));
+      conditions.push(`r.client_id = $${values.length}`);
+    }
+    if (po_number) {
+      values.push(po_number);
+      conditions.push(`r.po_number = $${values.length}`);
     }
     if (from_date) {
       values.push(from_date);
@@ -71,16 +243,20 @@ const getReports = async (req, res) => {
       `SELECT
          r.id, r.job_id,
          j.title         AS job_title,
-         c.name          AS client_name,
-         r.title, r.findings, r.recommendations, r.status,
+         COALESCE(r.client_name, c.name) AS client_name,
+         r.client_email, r.client_id,
+         r.po_number, r.location, r.serial_no,
+         r.title, r.findings, r.recommendations, r.comments,
+         r.status,
          r.technician_id, t.name AS technician_name,
          r.approved_by_user_id, r.approved_at,
          r.report_date,
-         (SELECT COUNT(*) FROM report_images ri WHERE ri.report_id = r.id) AS image_count,
+         (SELECT COUNT(*) FROM report_images ri WHERE ri.report_id = r.id)     AS image_count,
+         (SELECT COUNT(*) FROM technical_reports tr WHERE tr.report_id = r.id) AS technical_report_count,
          r.created_at, r.updated_at
        FROM reports r
        LEFT JOIN jobs        j ON j.id = r.job_id
-       LEFT JOIN clients     c ON c.id = j.client_id
+       LEFT JOIN clients     c ON c.id = COALESCE(r.client_id, j.client_id)
        LEFT JOIN technicians t ON t.id = r.technician_id
        ${where}
        ORDER BY r.created_at DESC
@@ -106,7 +282,11 @@ const getReports = async (req, res) => {
 const createReport = async (req, res) => {
   const dbClient = await pool.connect();
   try {
-    const { job_id, title, findings, recommendations, technician_id } = req.body;
+    const {
+      job_id, title, findings, recommendations, technician_id,
+      po_number, location, serial_no, comments,
+      client_id, client_name, client_email,
+    } = req.body;
 
     const missing = [];
     if (!job_id)        missing.push('job_id');
@@ -119,14 +299,37 @@ const createReport = async (req, res) => {
     }
 
     // Validate job exists
-    const jobCheck = await dbClient.query('SELECT id FROM jobs WHERE id = $1', [job_id]);
+    const jobCheck = await dbClient.query(
+      `SELECT j.id, j.client_id, c.name AS client_name, c.email AS client_email
+       FROM jobs j LEFT JOIN clients c ON c.id = j.client_id WHERE j.id = $1`,
+      [job_id]
+    );
     if (jobCheck.rows.length === 0) return Errors.jobNotFound(res);
+    const jobRow = jobCheck.rows[0];
 
     // Validate technician exists
     const techCheck = await dbClient.query(
-      'SELECT id FROM technicians WHERE id = $1', [technician_id]
+      'SELECT id, name FROM technicians WHERE id = $1', [technician_id]
     );
     if (techCheck.rows.length === 0) return Errors.technicianNotFound(res);
+
+    // ── Validate PO Number against AMC contracts ──────────────
+    if (po_number) {
+      const amcCheck = await dbClient.query(
+        'SELECT id FROM amc_contracts WHERE po_number = $1 LIMIT 1',
+        [po_number]
+      );
+      if (amcCheck.rows.length === 0) {
+        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+          `PO Number "${po_number}" does not match any AMC contract. Please enter a valid AMC PO Number.`,
+          { field: 'po_number' });
+      }
+    }
+
+    // Resolve client info: use explicitly provided, fallback to job's client
+    const resolvedClientId    = client_id    || jobRow.client_id    || null;
+    const resolvedClientName  = client_name  || jobRow.client_name  || null;
+    const resolvedClientEmail = client_email || jobRow.client_email || null;
 
     await dbClient.query('BEGIN');
 
@@ -134,15 +337,34 @@ const createReport = async (req, res) => {
 
     const result = await dbClient.query(
       `INSERT INTO reports
-         (id, job_id, title, findings, recommendations, status, technician_id, report_date)
-       VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_DATE)
+         (id, job_id, title, findings, recommendations, status, technician_id, report_date,
+          po_number, location, serial_no, comments, client_id, client_name, client_email)
+       VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_DATE, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
-      [reportId, job_id, title.trim(), findings || null, recommendations || null, technician_id]
+      [
+        reportId, job_id, title.trim(),
+        findings || null, recommendations || null, technician_id,
+        po_number || null, location || null, serial_no || null, comments || null,
+        resolvedClientId, resolvedClientName, resolvedClientEmail,
+      ]
     );
 
     await dbClient.query('COMMIT');
 
-    // ── Fire real-time notification: report_submitted ─────
+    const createdReport = result.rows[0];
+    createdReport.technician_name = techCheck.rows[0].name;
+
+    // ── Send report email to client ───────────────────────────
+    if (resolvedClientEmail) {
+      const html = buildReportEmailHtml(createdReport);
+      await sendNotification('report_submitted', {
+        to:      resolvedClientEmail,
+        subject: `Service Report ${reportId} — ${title.trim()} | Electromech Engineering`,
+        html,
+      });
+    }
+
+    // ── Fire real-time notification ───────────────────────────
     await notify({
       event:       'report_submitted',
       title:       'New Report Submitted',
@@ -162,8 +384,8 @@ const createReport = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `Report ${reportId} submitted successfully.`,
-      data: result.rows[0],
+      message: `Report ${reportId} submitted successfully.${resolvedClientEmail ? ` Notification sent to ${resolvedClientEmail}.` : ''}`,
+      data: createdReport,
     });
 
   } catch (error) {
@@ -186,14 +408,16 @@ const getReportById = async (req, res) => {
       `SELECT
          r.id, r.job_id,
          j.title         AS job_title,
-         c.name          AS client_name,
+         COALESCE(r.client_name, c.name) AS client_name,
+         r.client_email, r.client_id,
+         r.po_number, r.location, r.serial_no, r.comments,
          r.title, r.findings, r.recommendations, r.status,
          r.technician_id, t.name AS technician_name,
          r.approved_by_user_id, r.approved_at,
          r.report_date, r.created_at, r.updated_at
        FROM reports r
        LEFT JOIN jobs        j ON j.id = r.job_id
-       LEFT JOIN clients     c ON c.id = j.client_id
+       LEFT JOIN clients     c ON c.id = COALESCE(r.client_id, j.client_id)
        LEFT JOIN technicians t ON t.id = r.technician_id
        WHERE r.id = $1`,
       [id]
@@ -209,8 +433,15 @@ const getReportById = async (req, res) => {
        FROM report_images WHERE report_id = $1 ORDER BY uploaded_at ASC`,
       [id]
     );
-
     report.images = images.rows;
+
+    // Fetch technical reports
+    const techReports = await pool.query(
+      `SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at
+       FROM technical_reports WHERE report_id = $1 ORDER BY uploaded_at ASC`,
+      [id]
+    );
+    report.technical_reports = techReports.rows;
 
     return res.status(200).json({ success: true, data: report });
 
@@ -221,7 +452,7 @@ const getReportById = async (req, res) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// PATCH /api/reports/:id/status  — admin only: approve or reject
+// PATCH /api/reports/:id/status  — admin only
 // ────────────────────────────────────────────────────────────
 const updateReportStatus = async (req, res) => {
   try {
@@ -256,8 +487,7 @@ const updateReportStatus = async (req, res) => {
       [status, req.user.id, id]
     );
 
-    // ── Fire real-time notification: report_reviewed ────────
-    // Notify the technician who submitted the report
+    // ── Notify the technician ─────────────────────────────────
     const techUserRes = await pool.query(
       'SELECT t.user_id FROM technicians t JOIN reports r ON r.technician_id = t.id WHERE r.id = $1',
       [id]
@@ -304,7 +534,6 @@ const addReportImage = async (req, res) => {
     const existCheck = await pool.query('SELECT id, status FROM reports WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
 
-    // Max 20 images per report
     const countCheck = await pool.query(
       'SELECT COUNT(*) FROM report_images WHERE report_id = $1', [id]
     );
@@ -334,14 +563,7 @@ const addReportImage = async (req, res) => {
         `INSERT INTO report_images (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id, report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
-        [
-          id,
-          img.file_name,
-          img.file_url,
-          img.mime_type || 'image/jpeg',
-          img.file_size_bytes || null,
-          req.user.id,
-        ]
+        [id, img.file_name, img.file_url, img.mime_type || 'image/jpeg', img.file_size_bytes || null, req.user.id]
       );
       inserted.push(r.rows[0]);
     }
@@ -372,13 +594,11 @@ const deleteReportImage = async (req, res) => {
 
     const report = existCheck.rows[0];
 
-    // Only the submitting technician (while Pending) or admin can delete
     if (req.user.role !== 'admin') {
       if (report.status !== 'Pending') {
         return sendError(res, 403, ERROR_CODES.FORBIDDEN,
           'Only admins can delete images from an approved or rejected report.');
       }
-      // Check if this user is the linked technician
       const techCheck = await pool.query(
         'SELECT id FROM technicians WHERE id = $1 AND user_id = $2',
         [report.technician_id, req.user.id]
@@ -400,13 +620,126 @@ const deleteReportImage = async (req, res) => {
 
     await pool.query('DELETE FROM report_images WHERE id = $1', [imageId]);
 
-    return res.status(200).json({
-      success: true,
-      message: 'Image deleted successfully.',
-    });
+    return res.status(200).json({ success: true, message: 'Image deleted successfully.' });
 
   } catch (error) {
     console.error('Delete report image error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// POST /api/reports/:id/technical-reports
+// Upload/add technical report documents
+// ────────────────────────────────────────────────────────────
+const addTechnicalReports = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const docs = Array.isArray(req.body) ? req.body : [req.body];
+
+    const existCheck = await pool.query('SELECT id, status FROM reports WHERE id = $1', [id]);
+    if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg', 'image/png', 'image/webp',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+
+    for (const doc of docs) {
+      if (!doc.file_name || !doc.file_url) {
+        return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+          'Each technical report must have file_name and file_url.',
+          { missing_fields: ['file_name', 'file_url'] });
+      }
+      if (doc.mime_type && !allowedTypes.includes(doc.mime_type)) {
+        return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE,
+          `Invalid file type "${doc.mime_type}". Allowed: PDF, images, Word documents.`,
+          { field: 'mime_type', allowed: allowedTypes });
+      }
+    }
+
+    const inserted = [];
+    for (const doc of docs) {
+      const r = await pool.query(
+        `INSERT INTO technical_reports
+           (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
+        [id, doc.file_name, doc.file_url, doc.mime_type || 'application/pdf',
+         doc.file_size_bytes || null, req.user.id]
+      );
+      inserted.push(r.rows[0]);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${inserted.length} technical report(s) added to report ${id}.`,
+      data: inserted,
+    });
+
+  } catch (error) {
+    console.error('Add technical reports error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// GET /api/reports/:id/technical-reports
+// ────────────────────────────────────────────────────────────
+const getTechnicalReports = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existCheck = await pool.query('SELECT id FROM reports WHERE id = $1', [id]);
+    if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    const result = await pool.query(
+      `SELECT id, report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_at
+       FROM technical_reports WHERE report_id = $1 ORDER BY uploaded_at ASC`,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: result.rows,
+      total: result.rows.length,
+    });
+
+  } catch (error) {
+    console.error('Get technical reports error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// DELETE /api/reports/:id/technical-reports/:docId
+// ────────────────────────────────────────────────────────────
+const deleteTechnicalReport = async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+
+    const existCheck = await pool.query(
+      'SELECT id, status, technician_id FROM reports WHERE id = $1', [id]
+    );
+    if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    const docCheck = await pool.query(
+      'SELECT id FROM technical_reports WHERE id = $1 AND report_id = $2',
+      [docId, id]
+    );
+    if (docCheck.rows.length === 0) {
+      return sendError(res, 404, ERROR_CODES.REPORT_IMAGE_NOT_FOUND,
+        'Technical report document not found for this report.');
+    }
+
+    await pool.query('DELETE FROM technical_reports WHERE id = $1', [docId]);
+
+    return res.status(200).json({ success: true, message: 'Technical report document deleted successfully.' });
+
+  } catch (error) {
+    console.error('Delete technical report error:', error);
     return Errors.internalError(res);
   }
 };
@@ -418,4 +751,7 @@ module.exports = {
   updateReportStatus,
   addReportImage,
   deleteReportImage,
+  addTechnicalReports,
+  getTechnicalReports,
+  deleteTechnicalReport,
 };

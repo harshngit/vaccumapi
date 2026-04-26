@@ -8,7 +8,7 @@
 
 -- Get all clients (paginated)
 -- Params: $1=limit, $2=offset
-SELECT id, name, contact_person, email, phone, address,
+SELECT id, name, contact_person, email, phone, gst_no, address,
        type, status, contract_value, join_date,
        created_at, updated_at
 FROM clients
@@ -20,7 +20,7 @@ SELECT COUNT(*) FROM clients;
 
 -- Filter by type
 -- Params: $1=type, $2=limit, $3=offset
-SELECT id, name, contact_person, email, phone, address,
+SELECT id, name, contact_person, email, phone, gst_no, address,
        type, status, contract_value, join_date,
        created_at, updated_at
 FROM clients
@@ -30,7 +30,7 @@ LIMIT $2 OFFSET $3;
 
 -- Filter by status
 -- Params: $1=status, $2=limit, $3=offset
-SELECT id, name, contact_person, email, phone, address,
+SELECT id, name, contact_person, email, phone, gst_no, address,
        type, status, contract_value, join_date,
        created_at, updated_at
 FROM clients
@@ -40,7 +40,7 @@ LIMIT $2 OFFSET $3;
 
 -- Search by name or contact person (partial match)
 -- Params: $1=%search%, $2=limit, $3=offset
-SELECT id, name, contact_person, email, phone, address,
+SELECT id, name, contact_person, email, phone, gst_no, address,
        type, status, contract_value, join_date,
        created_at, updated_at
 FROM clients
@@ -54,7 +54,7 @@ LIMIT $2 OFFSET $3;
 
 -- Get client by ID
 -- Params: $1=id
-SELECT id, name, contact_person, email, phone, address,
+SELECT id, name, contact_person, email, phone, gst_no, address,
        type, status, contract_value, join_date,
        created_at, updated_at
 FROM clients
@@ -79,11 +79,11 @@ WHERE client_id = $1;
 
 -- Insert new client
 -- Params: $1=name, $2=contact_person, $3=email, $4=phone,
---         $5=address, $6=type, $7=status, $8=contract_value
+--         $5=gst_no, $6=address, $7=type, $8=status, $9=contract_value
 INSERT INTO clients
-  (name, contact_person, email, phone, address, type, status, contract_value, join_date)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE)
-RETURNING id, name, contact_person, email, phone, address,
+  (name, contact_person, email, phone, gst_no, address, type, status, contract_value, join_date)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_DATE)
+RETURNING id, name, contact_person, email, phone, gst_no, address,
           type, status, contract_value, join_date,
           created_at, updated_at;
 
@@ -92,18 +92,19 @@ RETURNING id, name, contact_person, email, phone, address,
 
 -- Update client record
 -- Params: $1=name, $2=contact_person, $3=email, $4=phone,
---         $5=address, $6=type, $7=status, $8=contract_value, $9=id
+--         $5=gst_no, $6=address, $7=type, $8=status, $9=contract_value, $10=id
 UPDATE clients
 SET name           = $1,
     contact_person = $2,
     email          = $3,
     phone          = $4,
-    address        = $5,
-    type           = $6,
-    status         = $7,
-    contract_value = $8
-WHERE id = $9
-RETURNING id, name, contact_person, email, phone, address,
+    gst_no         = $5,
+    address        = $6,
+    type           = $7,
+    status         = $8,
+    contract_value = $9
+WHERE id = $10
+RETURNING id, name, contact_person, email, phone, gst_no, address,
           type, status, contract_value, join_date,
           created_at, updated_at;
 

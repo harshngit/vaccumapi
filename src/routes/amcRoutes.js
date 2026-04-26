@@ -28,22 +28,12 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  * /api/amc/expiring:
  *   get:
  *     summary: Get AMC contracts whose renewal reminder fires today
- *     description: Used by a scheduled cron job. Returns contracts where `end_date - renewal_reminder_days <= today` and `end_date >= today`.
  *     tags: [AMC Contracts]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of expiring contracts with client contact info
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data:
- *                   type: array
- *                   items: { $ref: '#/components/schemas/AmcExpiringResponse' }
+ *         description: List of expiring contracts
  */
 router.get('/expiring', protect, authorize('admin', 'manager'), getExpiringContracts);
 
@@ -72,13 +62,13 @@ router.get('/expiring', protect, authorize('admin', 'manager'), getExpiringContr
  *       - in: query
  *         name: client_id
  *         schema: { type: integer }
+ *       - in: query
+ *         name: po_number
+ *         schema: { type: string }
+ *         description: Filter by PO Number
  *     responses:
  *       200:
  *         description: List of AMC contracts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/PaginatedAmcResponse'
  */
 router.get('/', protect, getAmcContracts);
 
@@ -89,6 +79,10 @@ router.get('/', protect, getAmcContracts);
  * /api/amc:
  *   post:
  *     summary: Create a new AMC contract
+ *     description: |
+ *       Creates the contract and sends a confirmation email to the client.
+ *       The cron job will send a renewal reminder email when expiry is within
+ *       renewal_reminder_days, and a 10-day service reminder based on next_service_date.
  *     tags: [AMC Contracts]
  *     security:
  *       - bearerAuth: []
@@ -97,23 +91,48 @@ router.get('/', protect, getAmcContracts);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateAmcRequest'
+ *             type: object
+ *             required: [client_id, title, start_date, end_date, value]
+ *             properties:
+ *               client_id:
+ *                 type: integer
+ *                 example: 5
+ *               title:
+ *                 type: string
+ *                 example: Annual Vacuum System Maintenance 2025
+ *               po_number:
+ *                 type: string
+ *                 example: PO-2025-001
+ *                 description: Purchase Order number (must be unique across all AMC contracts)
+ *               start_date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-01-01"
+ *               end_date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-12-31"
+ *               value:
+ *                 type: number
+ *                 example: 75000.00
+ *               next_service_date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-04-15"
+ *                 description: A 10-day reminder email will be sent to client before this date
+ *               renewal_reminder_days:
+ *                 type: integer
+ *                 default: 30
+ *                 example: 30
+ *               services:
+ *                 type: array
+ *                 items: { type: string }
+ *                 example: ["Preventive Maintenance", "Emergency Repairs", "Spare Parts"]
  *     responses:
  *       201:
- *         description: AMC contract created
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 message: { type: string }
- *                 data: { $ref: '#/components/schemas/AmcResponse' }
+ *         description: AMC contract created and confirmation email sent
  *       400:
  *         description: Validation error
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', protect, authorize('admin', 'manager'), createAmcContract);
 
@@ -136,18 +155,8 @@ router.post('/', protect, authorize('admin', 'manager'), createAmcContract);
  *     responses:
  *       200:
  *         description: AMC contract found
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data: { $ref: '#/components/schemas/AmcResponse' }
  *       404:
  *         description: Not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id', protect, getAmcById);
 
@@ -173,23 +182,31 @@ router.get('/:id', protect, getAmcById);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateAmcRequest'
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               po_number:
+ *                 type: string
+ *                 description: Must be unique — will reject if already used by another contract
+ *               end_date:
+ *                 type: string
+ *                 format: date
+ *               value:
+ *                 type: number
+ *               next_service_date:
+ *                 type: string
+ *                 format: date
+ *               renewal_reminder_days:
+ *                 type: integer
+ *               services:
+ *                 type: array
+ *                 items: { type: string }
  *     responses:
  *       200:
  *         description: AMC updated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 message: { type: string }
- *                 data: { $ref: '#/components/schemas/AmcResponse' }
  *       404:
  *         description: Not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.put('/:id', protect, authorize('admin', 'manager'), updateAmcContract);
 
@@ -200,7 +217,6 @@ router.put('/:id', protect, authorize('admin', 'manager'), updateAmcContract);
  * /api/amc/{id}:
  *   delete:
  *     summary: Delete an AMC contract (admin only)
- *     description: Also deletes all associated services (cascade).
  *     tags: [AMC Contracts]
  *     security:
  *       - bearerAuth: []
@@ -213,14 +229,8 @@ router.put('/:id', protect, authorize('admin', 'manager'), updateAmcContract);
  *     responses:
  *       200:
  *         description: Deleted
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/SuccessMessageResponse' }
  *       404:
  *         description: Not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.delete('/:id', protect, authorize('admin'), deleteAmcContract);
 

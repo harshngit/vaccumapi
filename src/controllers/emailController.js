@@ -10,30 +10,35 @@ const ERROR_CODES = require('../utils/errorCodes');
 
 // ─── Default notification trigger keys ───────────────────────
 const DEFAULT_TRIGGERS = [
-  { trigger_key: 'job_raised',      label: 'New Job Raised',             is_enabled: true  },
-  { trigger_key: 'job_assigned',    label: 'Job Assigned to Technician', is_enabled: true  },
-  { trigger_key: 'job_completed',   label: 'Job Completed / Closed',     is_enabled: true  },
-  { trigger_key: 'report_approved', label: 'Report Approved',            is_enabled: false },
-  { trigger_key: 'amc_renewal',     label: 'AMC Renewal Reminder',       is_enabled: true  },
-  { trigger_key: 'quotation_sent',  label: 'Quotation Sent',             is_enabled: false },
+  { trigger_key: 'job_raised',            label: 'New Job Raised',                   is_enabled: true  },
+  { trigger_key: 'job_assigned',          label: 'Job Assigned to Technician',        is_enabled: true  },
+  { trigger_key: 'job_completed',         label: 'Job Completed / Closed',            is_enabled: true  },
+  { trigger_key: 'report_submitted',      label: 'Report Submitted (Client Email)',   is_enabled: true  },
+  { trigger_key: 'report_approved',       label: 'Report Approved',                   is_enabled: false },
+  { trigger_key: 'amc_created',           label: 'AMC Contract Created',              is_enabled: true  },
+  { trigger_key: 'amc_renewal',           label: 'AMC Renewal Reminder',              is_enabled: true  },
+  { trigger_key: 'amc_service_reminder',  label: 'AMC 10-Day Service Reminder',       is_enabled: true  },
+  { trigger_key: 'quotation_sent',        label: 'Quotation Sent',                    is_enabled: false },
 ];
 
 // ─── Build nodemailer transporter ────────────────────────────
-// Uses DB settings if configured, falls back to .env vars
 const buildTransporter = (settings) => {
-  const host     = settings.smtp_host     || process.env.SMTP_HOST     || 'smtp.gmail.com';
-  const port     = settings.smtp_port     || parseInt(process.env.SMTP_PORT || '587');
-  const user     = settings.from_email    || process.env.SMTP_USER;
-  const pass     = settings.smtp_password_enc || process.env.SMTP_PASS;
+  const host = settings.smtp_host         || process.env.SMTP_HOST     || 'smtp.gmail.com';
+  const port = settings.smtp_port         || parseInt(process.env.SMTP_PORT || '587');
+  const user = settings.from_email        || process.env.SMTP_USER;
+  const pass = settings.smtp_password_enc || process.env.SMTP_PASS;
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,          // true for SSL (465), false for TLS (587)
+    secure: port === 465,
     auth: { user, pass },
-    tls:  { rejectUnauthorized: false }, // needed for some Gmail setups
+    tls:  { rejectUnauthorized: false },
   });
 };
+
+// ─── Build transporter directly from env (for jobs / cron) ───
+const buildTransporterFromEnv = () => buildTransporter({});
 
 // ────────────────────────────────────────────────────────────
 // GET /api/email-settings
@@ -46,15 +51,14 @@ const getEmailSettings = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      // Return env-based defaults so frontend can show something useful
       return res.status(200).json({
         success: true,
         data: {
           id:           null,
-          smtp_host:    process.env.SMTP_HOST  || 'smtp.gmail.com',
+          smtp_host:    process.env.SMTP_HOST     || 'smtp.gmail.com',
           smtp_port:    parseInt(process.env.SMTP_PORT || '587'),
-          from_email:   process.env.SMTP_USER  || '',
-          from_name:    process.env.SMTP_FROM_NAME || 'VDTI Service Hub',
+          from_email:   process.env.SMTP_USER     || '',
+          from_name:    process.env.SMTP_FROM_NAME || 'Electromech Engineering',
           is_active:    false,
           notifications: DEFAULT_TRIGGERS.reduce((acc, t) => {
             acc[t.trigger_key] = t.is_enabled;
@@ -78,7 +82,6 @@ const getEmailSettings = async (req, res) => {
     const notifications = {};
     for (const t of triggers.rows) notifications[t.trigger_key] = t.is_enabled;
 
-    // Fill any missing trigger keys with defaults
     for (const d of DEFAULT_TRIGGERS) {
       if (!(d.trigger_key in notifications)) {
         notifications[d.trigger_key] = d.is_enabled;
@@ -102,12 +105,8 @@ const upsertEmailSettings = async (req, res) => {
   const dbClient = await pool.connect();
   try {
     const {
-      smtp_host,
-      smtp_port,
-      from_email,
-      from_name,
-      smtp_password,   // raw password — write directly to DB (use App Password for Gmail)
-      notifications,
+      smtp_host, smtp_port, from_email, from_name,
+      smtp_password, notifications,
     } = req.body;
 
     if (!from_email) {
@@ -115,9 +114,9 @@ const upsertEmailSettings = async (req, res) => {
         'from_email is required.', { field: 'from_email' });
     }
 
-    const finalHost     = smtp_host  || process.env.SMTP_HOST     || 'smtp.gmail.com';
+    const finalHost     = smtp_host  || process.env.SMTP_HOST      || 'smtp.gmail.com';
     const finalPort     = smtp_port  || parseInt(process.env.SMTP_PORT || '587');
-    const finalFromName = from_name  || process.env.SMTP_FROM_NAME || 'VDTI Service Hub';
+    const finalFromName = from_name  || process.env.SMTP_FROM_NAME  || 'Electromech Engineering';
 
     await dbClient.query('BEGIN');
 
@@ -129,7 +128,6 @@ const upsertEmailSettings = async (req, res) => {
 
     if (existing.rows.length > 0) {
       settingsId = existing.rows[0].id;
-      // Only update password if a new one is explicitly provided
       const keepPassword = smtp_password !== undefined
         ? smtp_password
         : existing.rows[0].smtp_password_enc;
@@ -143,7 +141,6 @@ const upsertEmailSettings = async (req, res) => {
          keepPassword, req.user.id, settingsId]
       );
     } else {
-      // First-time setup — use SMTP_PASS from env if no password provided
       const initialPassword = smtp_password || process.env.SMTP_PASS || null;
 
       const insertResult = await dbClient.query(
@@ -157,7 +154,6 @@ const upsertEmailSettings = async (req, res) => {
       );
       settingsId = insertResult.rows[0].id;
 
-      // Insert all default triggers
       for (const t of DEFAULT_TRIGGERS) {
         await dbClient.query(
           `INSERT INTO notification_triggers
@@ -169,7 +165,6 @@ const upsertEmailSettings = async (req, res) => {
       }
     }
 
-    // Upsert notification triggers if provided
     if (notifications && typeof notifications === 'object') {
       for (const [key, enabled] of Object.entries(notifications)) {
         await dbClient.query(
@@ -184,7 +179,6 @@ const upsertEmailSettings = async (req, res) => {
 
     await dbClient.query('COMMIT');
 
-    // Return updated settings
     const updated = await pool.query(
       `SELECT id, smtp_host, smtp_port, from_email, from_name, is_active, updated_at
        FROM email_settings WHERE id = $1`,
@@ -229,7 +223,6 @@ const testEmail = async (req, res) => {
         '"to" email address is required.', { field: 'to' });
     }
 
-    // Load DB settings OR fall back to env vars
     const result = await pool.query(
       `SELECT smtp_host, smtp_port, from_email, from_name, smtp_password_enc
        FROM email_settings WHERE is_active = TRUE LIMIT 1`
@@ -239,13 +232,12 @@ const testEmail = async (req, res) => {
     if (result.rows.length > 0) {
       settings = result.rows[0];
     } else {
-      // Fall back to .env
       settings = {
-        smtp_host:         process.env.SMTP_HOST      || 'smtp.gmail.com',
+        smtp_host:         process.env.SMTP_HOST     || 'smtp.gmail.com',
         smtp_port:         parseInt(process.env.SMTP_PORT || '587'),
-        from_email:        process.env.SMTP_USER       || '',
-        from_name:         process.env.SMTP_FROM_NAME  || 'VDTI Service Hub',
-        smtp_password_enc: process.env.SMTP_PASS        || null,
+        from_email:        process.env.SMTP_USER      || '',
+        from_name:         process.env.SMTP_FROM_NAME || 'Electromech Engineering',
+        smtp_password_enc: process.env.SMTP_PASS       || null,
       };
     }
 
@@ -255,17 +247,15 @@ const testEmail = async (req, res) => {
     }
 
     const transporter = buildTransporter(settings);
-
-    // Verify connection before sending
     await transporter.verify();
 
     await transporter.sendMail({
       from:    `"${settings.from_name}" <${settings.from_email}>`,
       to,
-      subject: '✅ VDTI Service Hub — Test Email',
+      subject: '✅ Electromech Engineering — Test Email',
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-          <h2 style="color:#2563eb;margin-bottom:4px;">VDTI Service Hub</h2>
+          <h2 style="color:#2563eb;margin-bottom:4px;">Electromech Engineering</h2>
           <p style="color:#6b7280;margin-top:0;">Notification System Test</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
           <p>Your SMTP configuration is working correctly.</p>
@@ -292,17 +282,12 @@ const testEmail = async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // HELPER — sendNotification
-// Used internally by other controllers (job, report, amc)
-// Usage:
-//   const { sendNotification } = require('./emailController');
-//   await sendNotification('job_raised', {
-//     to: 'admin@vdti.com',
-//     subject: 'New Job Raised',
-//     html: '<p>Job JOB-0001 has been raised.</p>',
-//   });
+// Used internally by controllers and cron jobs.
+// Falls back gracefully — email failures never crash the request.
 // ────────────────────────────────────────────────────────────
 const sendNotification = async (triggerKey, { to, subject, html }) => {
   try {
+    // Try DB settings first
     const result = await pool.query(
       `SELECT es.smtp_host, es.smtp_port, es.from_email, es.from_name,
               es.smtp_password_enc, nt.is_enabled
@@ -313,15 +298,33 @@ const sendNotification = async (triggerKey, { to, subject, html }) => {
       [triggerKey]
     );
 
-    if (result.rows.length === 0 || !result.rows[0].is_enabled) return;
+    let settings;
 
-    const settings = result.rows[0];
-
-    // Fall back to env if DB password not set
-    if (!settings.smtp_password_enc) {
-      settings.smtp_password_enc = process.env.SMTP_PASS || null;
+    if (result.rows.length > 0 && result.rows[0].is_enabled) {
+      settings = result.rows[0];
+      if (!settings.smtp_password_enc) {
+        settings.smtp_password_enc = process.env.SMTP_PASS || null;
+      }
+    } else if (result.rows.length === 0) {
+      // No DB settings at all — fall back entirely to .env
+      settings = {
+        smtp_host:         process.env.SMTP_HOST      || 'smtp.gmail.com',
+        smtp_port:         parseInt(process.env.SMTP_PORT || '587'),
+        from_email:        process.env.SMTP_USER       || '',
+        from_name:         process.env.SMTP_FROM_NAME  || 'Electromech Engineering',
+        smtp_password_enc: process.env.SMTP_PASS        || null,
+        is_enabled:        true, // assume enabled if no DB config
+      };
+    } else {
+      // Trigger exists but is disabled
+      console.log(`[Email] Trigger "${triggerKey}" is disabled. Skipping.`);
+      return;
     }
-    if (!settings.smtp_password_enc) return;
+
+    if (!settings.smtp_password_enc) {
+      console.warn(`[Email] No SMTP password configured. Skipping "${triggerKey}".`);
+      return;
+    }
 
     const transporter = buildTransporter(settings);
 
@@ -335,8 +338,8 @@ const sendNotification = async (triggerKey, { to, subject, html }) => {
     console.log(`[Email] ✅ "${triggerKey}" notification sent to ${to}`);
 
   } catch (err) {
-    // Email failures never crash the main request
     console.error(`[Email] ❌ Failed to send "${triggerKey}":`, err.message);
+    // Never throw — email failures must not crash the main request
   }
 };
 
@@ -345,4 +348,5 @@ module.exports = {
   upsertEmailSettings,
   testEmail,
   sendNotification,
+  buildTransporterFromEnv,
 };

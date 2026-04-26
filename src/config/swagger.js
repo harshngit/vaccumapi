@@ -136,7 +136,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
           properties: {
             id: { type: 'integer' }, name: { type: 'string' }, contact_person: { type: 'string' },
             email: { type: 'string', nullable: true }, phone: { type: 'string', nullable: true },
-            address: { type: 'string', nullable: true },
+            gst_no: { type: 'string', nullable: true }, address: { type: 'string', nullable: true },
             type: { type: 'string', enum: ['Corporate','Residential','Commercial','Healthcare','Government'] },
             status: { type: 'string', enum: ['Active','Inactive'] },
             contract_value: { type: 'number' }, join_date: { type: 'string', format: 'date', nullable: true },
@@ -147,7 +147,8 @@ Use the **Authorize** button (top right) and enter your JWT token as:
           type: 'object', required: ['name', 'contact_person'],
           properties: {
             name: { type: 'string', example: 'Rainbow Tech Park' }, contact_person: { type: 'string', example: 'Sunita Menon' },
-            email: { type: 'string', format: 'email' }, phone: { type: 'string' }, address: { type: 'string' },
+            email: { type: 'string', format: 'email' }, phone: { type: 'string' },
+            gst_no: { type: 'string', example: '27AAACG1234A1Z5' }, address: { type: 'string' },
             type: { type: 'string', enum: ['Corporate','Residential','Commercial','Healthcare','Government'], default: 'Corporate' },
             status: { type: 'string', enum: ['Active','Inactive'], default: 'Active' },
             contract_value: { type: 'number', example: 250000 },
@@ -157,7 +158,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
           type: 'object',
           properties: {
             name: { type: 'string' }, contact_person: { type: 'string' }, email: { type: 'string', format: 'email' },
-            phone: { type: 'string' }, address: { type: 'string' },
+            phone: { type: 'string' }, gst_no: { type: 'string' }, address: { type: 'string' },
             type: { type: 'string', enum: ['Corporate','Residential','Commercial','Healthcare','Government'] },
             status: { type: 'string', enum: ['Active','Inactive'] }, contract_value: { type: 'number' },
           },

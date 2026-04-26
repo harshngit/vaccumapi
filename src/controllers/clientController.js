@@ -64,7 +64,7 @@ const getClients = async (req, res) => {
 
     values.push(limit, offset);
     const result = await pool.query(
-      `SELECT id, name, contact_person, email, phone, address, type, status,
+      `SELECT id, name, contact_person, email, phone, gst_no, address, type, status,
               contract_value, join_date, created_at, updated_at
        FROM clients ${where}
        ORDER BY created_at DESC
@@ -99,6 +99,7 @@ const createClient = async (req, res) => {
       contact_person,
       email,
       phone,
+      gst_no,
       address,
       type = 'Corporate',
       status = 'Active',
@@ -137,15 +138,16 @@ const createClient = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO clients
-         (name, contact_person, email, phone, address, type, status, contract_value, join_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE)
-       RETURNING id, name, contact_person, email, phone, address, type, status,
+         (name, contact_person, email, phone, gst_no, address, type, status, contract_value, join_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_DATE)
+       RETURNING id, name, contact_person, email, phone, gst_no, address, type, status,
                  contract_value, join_date, created_at, updated_at`,
       [
         name.trim(),
         contact_person.trim(),
         email ? email.toLowerCase() : null,
         phone  || null,
+        gst_no || null,
         address || null,
         type,
         status,
@@ -177,7 +179,7 @@ const getClientById = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, name, contact_person, email, phone, address, type, status,
+      `SELECT id, name, contact_person, email, phone, gst_no, address, type, status,
               contract_value, join_date, created_at, updated_at
        FROM clients WHERE id = $1`,
       [id]
@@ -228,10 +230,10 @@ const updateClient = async (req, res) => {
     if (existCheck.rows.length === 0) return Errors.clientNotFound(res);
 
     const cur = existCheck.rows[0];
-    const { name, contact_person, email, phone, address, type, status, contract_value } = req.body;
+    const { name, contact_person, email, phone, gst_no, address, type, status, contract_value } = req.body;
 
     if (!name && !contact_person && email === undefined && phone === undefined &&
-        address === undefined && !type && !status && contract_value === undefined) {
+        gst_no === undefined && address === undefined && !type && !status && contract_value === undefined) {
       return sendError(res, 400, ERROR_CODES.NO_FIELDS_TO_UPDATE,
         'No fields provided to update. Please include at least one field.');
     }
@@ -260,6 +262,7 @@ const updateClient = async (req, res) => {
     const newContactPerson  = contact_person ? contact_person.trim() : cur.contact_person;
     const newEmail          = email          ? email.toLowerCase()   : cur.email;
     const newPhone          = phone          !== undefined ? phone     : cur.phone;
+    const newGstNo          = gst_no         !== undefined ? gst_no    : cur.gst_no;
     const newAddress        = address        !== undefined ? address   : cur.address;
     const newType           = type           || cur.type;
     const newStatus         = status         || cur.status;
@@ -269,12 +272,12 @@ const updateClient = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE clients
-       SET name=$1, contact_person=$2, email=$3, phone=$4, address=$5,
-           type=$6, status=$7, contract_value=$8
-       WHERE id=$9
-       RETURNING id, name, contact_person, email, phone, address, type, status,
+       SET name=$1, contact_person=$2, email=$3, phone=$4, gst_no=$5, address=$6,
+           type=$7, status=$8, contract_value=$9
+       WHERE id=$10
+       RETURNING id, name, contact_person, email, phone, gst_no, address, type, status,
                  contract_value, join_date, created_at, updated_at`,
-      [newName, newContactPerson, newEmail, newPhone, newAddress,
+      [newName, newContactPerson, newEmail, newPhone, newGstNo, newAddress,
        newType, newStatus, newContractValue, id]
     );
 

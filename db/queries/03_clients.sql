@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS clients (
   contact_person  VARCHAR(150)   NOT NULL,
   email           VARCHAR(255),
   phone           VARCHAR(20),
+  gst_no          VARCHAR(15),
   address         TEXT,
   type            client_type    NOT NULL DEFAULT 'Corporate',
   status          client_status  NOT NULL DEFAULT 'Active',
