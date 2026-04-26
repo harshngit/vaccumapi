@@ -1,6 +1,6 @@
 // ============================================================
 // src/middleware/uploadMiddleware.js
-// Local file upload using Multer — for Railway production server
+// Local file upload using Multer
 // Files are saved to /uploads folder in the project root.
 // Public URL: {BASE_URL}/uploads/{stored_filename}
 // ============================================================
@@ -18,43 +18,70 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 
 // ─── Allowed MIME types ───────────────────────────────────────
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_SIZE_MB   = parseInt(process.env.MAX_IMAGE_SIZE_MB || '10');
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-// ─── Storage: save to /uploads with timestamped filename ─────
+const DOC_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/msword',                                                          // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',    // .docx
+];
+
+const MAX_IMAGE_SIZE_MB = parseInt(process.env.MAX_IMAGE_SIZE_MB || '10');
+const MAX_DOC_SIZE_MB   = parseInt(process.env.MAX_DOC_SIZE_MB   || '20');
+
+// ─── Shared disk storage ──────────────────────────────────────
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
-    // e.g. 1714012345678_site_before.jpg
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const stored   = `${Date.now()}_${safeName}`;
-    cb(null, stored);
+    cb(null, `${Date.now()}_${safeName}`);
   },
 });
 
-// ─── File type filter ─────────────────────────────────────────
-const fileFilter = (req, file, cb) => {
-  if (ALLOWED_TYPES.includes(file.mimetype)) {
+// ─── Image-only filter ────────────────────────────────────────
+const imageFileFilter = (req, file, cb) => {
+  if (IMAGE_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
   }
 };
 
-// ─── Multer instance ──────────────────────────────────────────
+// ─── Document filter (PDF + Word + images) ───────────────────
+const docFileFilter = (req, file, cb) => {
+  if (DOC_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
+  }
+};
+
+// ─── Multer instances ─────────────────────────────────────────
+
+// For POST /api/upload  (images only)
 const upload = multer({
   storage,
-  fileFilter,
+  fileFilter: imageFileFilter,
   limits: {
-    fileSize: MAX_SIZE_MB * 1024 * 1024,
-    files: 20,
+    fileSize: MAX_IMAGE_SIZE_MB * 1024 * 1024,
+    files:    20,
+  },
+});
+
+// For POST /api/upload/technical-reports  (PDF, Word, images)
+const uploadDocs = multer({
+  storage,
+  fileFilter: docFileFilter,
+  limits: {
+    fileSize: MAX_DOC_SIZE_MB * 1024 * 1024,
+    files:    10,
   },
 });
 
 // ─── Error handler wrapper ────────────────────────────────────
-// Wraps multer errors into our standard sendError format
 const handleUploadErrors = (uploadMiddleware) => {
   return (req, res, next) => {
     uploadMiddleware(req, res, (err) => {
@@ -63,16 +90,16 @@ const handleUploadErrors = (uploadMiddleware) => {
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE,
-            `File too large. Maximum allowed size is ${MAX_SIZE_MB}MB per image.`);
+            `File too large. Maximum allowed size is ${MAX_IMAGE_SIZE_MB}MB per image / ${MAX_DOC_SIZE_MB}MB per document.`);
         }
         if (err.code === 'LIMIT_FILE_COUNT') {
           return sendError(res, 400, ERROR_CODES.TOO_MANY_IMAGES,
-            'Too many files. Maximum 20 images allowed per upload.');
+            'Too many files uploaded at once.');
         }
         if (err.code === 'LIMIT_UNEXPECTED_FILE') {
           return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE,
-            'Invalid file type. Only JPEG, PNG, and WebP images are allowed.',
-            { allowed: ALLOWED_TYPES });
+            'Invalid file type. Images: JPEG, PNG, WebP. Documents: PDF, DOC, DOCX.',
+            { allowed_images: IMAGE_TYPES, allowed_docs: DOC_TYPES });
         }
         return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, err.message);
       }
@@ -86,7 +113,7 @@ const handleUploadErrors = (uploadMiddleware) => {
 const getFileUrl = (req, filename) => {
   const base = process.env.BASE_URL ||
     `${req.protocol}://${req.get('host')}`;
-  return `${base}/uploads/${filename}`;
+  return `${base.replace(/\/$/, '')}/uploads/${filename}`;
 };
 
-module.exports = { upload, handleUploadErrors, getFileUrl, UPLOAD_DIR };
+module.exports = { upload, uploadDocs, handleUploadErrors, getFileUrl, UPLOAD_DIR };

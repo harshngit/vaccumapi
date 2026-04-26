@@ -1,7 +1,5 @@
 // ============================================================
 // src/controllers/uploadController.js
-// POST /api/upload  — upload one or multiple images
-// Returns public URLs that can then be used in job/report image APIs
 // ============================================================
 
 const pool = require('../config/db');
@@ -14,7 +12,7 @@ const { getFileUrl, UPLOAD_DIR } = require('../middleware/uploadMiddleware');
 // ────────────────────────────────────────────────────────────
 // POST /api/upload
 // Body: multipart/form-data, field: images (1–20 files)
-// Optional query: ?entity_type=job&entity_id=JOB-0001
+// Accepts: JPEG, PNG, WebP
 // ────────────────────────────────────────────────────────────
 const uploadFiles = async (req, res) => {
   try {
@@ -30,7 +28,6 @@ const uploadFiles = async (req, res) => {
     for (const file of req.files) {
       const fileUrl = getFileUrl(req, file.filename);
 
-      // Record in uploads table
       const result = await pool.query(
         `INSERT INTO uploads
            (original_name, stored_name, file_url, mime_type, file_size_bytes,
@@ -56,11 +53,79 @@ const uploadFiles = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: `${uploaded.length} file(s) uploaded successfully.`,
-      data: uploaded,
+      data:    uploaded,
     });
 
   } catch (error) {
     console.error('Upload error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// POST /api/upload/technical-reports
+// Upload technical report files (PDF, Word, images).
+// No report ID required — call this BEFORE creating the report,
+// then pass the returned file_name + file_url into POST /api/reports
+// under the technical_reports[] array.
+//
+// Body: multipart/form-data, field: files (1–10 files)
+// Accepts: PDF, JPEG, PNG, WebP, DOC, DOCX
+// ────────────────────────────────────────────────────────────
+const uploadTechnicalReports = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        'No files uploaded. Please attach at least one file under the "files" field.');
+    }
+
+    const uploaded = [];
+
+    for (const file of req.files) {
+      const fileUrl = getFileUrl(req, file.filename);
+
+      // Record in uploads table with entity_type = 'technical_report'
+      const result = await pool.query(
+        `INSERT INTO uploads
+           (original_name, stored_name, file_url, mime_type, file_size_bytes,
+            entity_type, entity_id, uploaded_by_user_id)
+         VALUES ($1, $2, $3, $4, $5, 'technical_report', NULL, $6)
+         RETURNING id, original_name, stored_name, file_url, mime_type,
+                   file_size_bytes, uploaded_at`,
+        [
+          file.originalname,
+          file.filename,
+          fileUrl,
+          file.mimetype,
+          file.size,
+          req.user.id,
+        ]
+      );
+
+      const row = result.rows[0];
+
+      // Shape the response to match exactly what POST /api/reports expects
+      // in its technical_reports[] array
+      uploaded.push({
+        id:              row.id,
+        file_name:       row.original_name,
+        stored_name:     row.stored_name,
+        file_url:        row.file_url,
+        mime_type:       row.mime_type,
+        file_size_bytes: row.file_size_bytes,
+        uploaded_at:     row.uploaded_at,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${uploaded.length} technical report file(s) uploaded successfully.`,
+      data:    uploaded,
+      note:    'Pass these objects in the technical_reports[] array when calling POST /api/reports.',
+    });
+
+  } catch (error) {
+    console.error('Upload technical reports error:', error);
     return Errors.internalError(res);
   }
 };
@@ -94,7 +159,6 @@ const deleteFile = async (req, res) => {
       fs.unlinkSync(filePath);
     }
 
-    // Delete DB record
     await pool.query('DELETE FROM uploads WHERE id = $1', [id]);
 
     return res.status(200).json({
@@ -108,4 +172,4 @@ const deleteFile = async (req, res) => {
   }
 };
 
-module.exports = { uploadFiles, deleteFile };
+module.exports = { uploadFiles, uploadTechnicalReports, deleteFile };
