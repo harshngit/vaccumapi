@@ -226,23 +226,56 @@ const createTechnician = async (req, res) => {
     }
 
     // ── Insert technician row ─────────────────────────────
-    const techResult = await client.query(
-      `INSERT INTO technicians
-         (user_id, name, email, phone, specialization, status, join_date, avatar)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, user_id, name, email, phone, specialization, status,
-                 join_date, jobs_completed, rating, avatar, created_at, updated_at`,
-      [
-        linkedUserId,
-        name.trim(),
-        email ? email.toLowerCase() : null,
-        phone,
-        specialization.trim(),
-        status,
-        join_date || null,
-        avatar,
-      ]
-    );
+    // IMPORTANT: id is explicitly set to linkedUserId so that
+    // technician.id === technician.user_id at all times.
+    // If there is no linked user (no email/password provided),
+    // we let SERIAL assign the id naturally and leave user_id NULL.
+    let techResult;
+    if (linkedUserId) {
+      // Override SERIAL — force id = user_id
+      // We must advance the sequence past this value to avoid future conflicts
+      await client.query(
+        `SELECT setval(pg_get_serial_sequence('technicians', 'id'), GREATEST(nextval(pg_get_serial_sequence('technicians', 'id')), $1 + 1) - 1)`,
+        [linkedUserId]
+      );
+      techResult = await client.query(
+        `INSERT INTO technicians
+           (id, user_id, name, email, phone, specialization, status, join_date, avatar)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, user_id, name, email, phone, specialization, status,
+                   join_date, jobs_completed, rating, avatar, created_at, updated_at`,
+        [
+          linkedUserId,   // id  = user_id (they are the same)
+          linkedUserId,   // user_id
+          name.trim(),
+          email ? email.toLowerCase() : null,
+          phone,
+          specialization.trim(),
+          status,
+          join_date || null,
+          avatar,
+        ]
+      );
+    } else {
+      // No linked user — use normal SERIAL for id, user_id stays NULL
+      techResult = await client.query(
+        `INSERT INTO technicians
+           (user_id, name, email, phone, specialization, status, join_date, avatar)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, user_id, name, email, phone, specialization, status,
+                   join_date, jobs_completed, rating, avatar, created_at, updated_at`,
+        [
+          null,
+          name.trim(),
+          email ? email.toLowerCase() : null,
+          phone,
+          specialization.trim(),
+          status,
+          join_date || null,
+          avatar,
+        ]
+      );
+    }
 
     await client.query('COMMIT');
 
@@ -419,7 +452,7 @@ const deleteTechnician = async (req, res) => {
       type:         'technician',
       action:       `Technician "${existCheck.rows[0].name}" deleted`,
       entity_type:  'technician',
-      entity_id:    String(techId),
+      entity_id:    String(id),
       performed_by: req.user.id,
     });
 
