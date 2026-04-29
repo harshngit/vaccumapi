@@ -558,44 +558,45 @@ const createAmcContract = async (req, res) => {
     contract.client_email = clientRow.email;
     contract.days_left   = Math.ceil((new Date(end_date) - new Date()) / (1000 * 60 * 60 * 24));
 
-    // ── Send AMC Created email to client ──────────────────────
+    // ── Respond IMMEDIATELY — never block on email/notifications ──
+    res.status(201).json({
+      success: true,
+      message: `AMC contract ${amcId} created for ${contract.client_name}.${clientRow.email ? ` Confirmation email is being sent to ${clientRow.email}.` : ''}`,
+      data: contract,
+    });
+
+    // ── Email: fire-and-forget — sendNotification returns instantly ──
     if (clientRow.email) {
       const html = buildAmcCreatedEmail(contract);
-      await sendNotification('amc_created', {
+      sendNotification('amc_created', {
         to:      clientRow.email,
         subject: `AMC Contract ${amcId} Created — ${title.trim()} | Electromech Engineering`,
         html,
       });
     }
 
-    // ── Fire real-time notification ───────────────────────────
-    await notify({
+    // ── WS notification + activity log: .catch so they never throw ──
+    notify({
       event:       'amc_created',
       title:       'New AMC Contract Created',
       message:     `${amcId} — ${title.trim()} for ${contract.client_name}`,
       entity_type: 'amc',
       entity_id:   amcId,
       roles:       ['admin', 'manager'],
-    }, wsManager);
+    }, wsManager).catch(e => console.error('[amc notify]', e.message));
 
-    await logActivity({
+    logActivity({
       type:         'amc',
       action:       `AMC ${amcId} created — ${title.trim()} for ${contract.client_name}`,
       entity_type:  'amc',
       entity_id:    amcId,
       performed_by: req.user.id,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: `AMC contract ${amcId} created for ${contract.client_name}.${clientRow.email ? ` Confirmation sent to ${clientRow.email}.` : ''}`,
-      data: contract,
-    });
+    }).catch(e => console.error('[amc activity]', e.message));
 
   } catch (error) {
     await dbClient.query('ROLLBACK');
     console.error('Create AMC error:', error);
-    return Errors.internalError(res);
+    if (!res.headersSent) return Errors.internalError(res);
   } finally {
     dbClient.release();
   }

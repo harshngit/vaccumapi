@@ -6,6 +6,7 @@ const express = require('express');
 const router  = express.Router();
 const {
   getJobs,
+  getJobsByUser,
   createJob,
   getJobById,
   updateJob,
@@ -20,7 +21,7 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  * @swagger
  * tags:
  *   name: Jobs
- *   description: Work order management
+ *   description: Visit Scheduled / Work order management
  */
 
 // ────────────────────────────────────────────────────────────
@@ -62,29 +63,22 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *         name: technician_id
  *         schema: { type: integer }
  *       - in: query
+ *         name: amc_id
+ *         schema: { type: string }
+ *         description: Filter jobs linked to a specific AMC contract (e.g. AMC-0001)
+ *       - in: query
  *         name: search
  *         schema: { type: string }
  *         description: Search by job ID or title
  *       - in: query
  *         name: from_date
  *         schema: { type: string, format: date }
- *         description: Filter raised_date >= from_date
  *       - in: query
  *         name: to_date
  *         schema: { type: string, format: date }
- *         description: Filter raised_date <= to_date
  *     responses:
  *       200:
  *         description: List of jobs
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/PaginatedJobsResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', protect, getJobs);
 
@@ -92,12 +86,69 @@ router.get('/', protect, getJobs);
 
 /**
  * @swagger
+ * /api/jobs/by-user/{user_id}:
+ *   get:
+ *     summary: Get all jobs assigned to the technician linked to a user_id
+ *     description: |
+ *       Resolves the technician profile via `user_id`, then returns all jobs
+ *       assigned to that technician. Supports optional `status` filter and pagination.
+ *     tags: [Jobs]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: user_id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: The user account ID (not the technician record ID)
+ *         example: 5
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Raised, Assigned, In Progress, Closed]
+ *         description: Optional status filter
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *     responses:
+ *       200:
+ *         description: Jobs for the technician linked to this user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 technician:
+ *                   type: object
+ *                   properties:
+ *                     id:      { type: integer }
+ *                     name:    { type: string }
+ *                     user_id: { type: integer }
+ *                 data:
+ *                   type: array
+ *                   items: { type: object }
+ *                 pagination:
+ *                   type: object
+ *       404:
+ *         description: No technician profile found for this user_id
+ */
+router.get('/by-user/:user_id', protect, getJobsByUser);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
  * /api/jobs:
  *   post:
- *     summary: Raise a new work order
+ *     summary: Raise a new visit / work order
  *     description: |
- *       Creates a new job. If `technician_id` is provided at creation,
- *       the status is automatically set to `Assigned`, otherwise it starts as `Raised`.
+ *       Creates a new job. If `technician_id` is provided, status auto-sets to `Assigned`.
+ *       `amc_id` is optional — links the job to an AMC contract.
  *     tags: [Jobs]
  *     security:
  *       - bearerAuth: []
@@ -106,24 +157,32 @@ router.get('/', protect, getJobs);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateJobRequest'
+ *             type: object
+ *             required: [title, client_id]
+ *             properties:
+ *               title:          { type: string, example: "Quarterly Vacuum Pump Inspection" }
+ *               description:    { type: string }
+ *               client_id:      { type: integer, example: 3 }
+ *               technician_id:  { type: integer, example: 2 }
+ *               amc_id:
+ *                 type: string
+ *                 example: AMC-0001
+ *                 description: Optional AMC contract this visit is linked to
+ *               priority:
+ *                 type: string
+ *                 enum: [Low, Medium, High, Critical]
+ *                 default: Medium
+ *               category:
+ *                 type: string
+ *                 enum: [Maintenance, Repair, Installation, Inspection]
+ *                 default: Maintenance
+ *               scheduled_date: { type: string, format: date }
+ *               amount:         { type: number, default: 0 }
  *     responses:
  *       201:
- *         description: Job raised successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 message: { type: string }
- *                 data:
- *                   $ref: '#/components/schemas/JobResponse'
+ *         description: Job raised
  *       400:
  *         description: Validation error
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', protect, authorize('admin', 'manager', 'engineer'), createJob);
 
@@ -133,7 +192,7 @@ router.post('/', protect, authorize('admin', 'manager', 'engineer'), createJob);
  * @swagger
  * /api/jobs/{id}:
  *   get:
- *     summary: Get a single job with images and linked reports
+ *     summary: Get a single job with images, reports, and AMC info
  *     tags: [Jobs]
  *     security:
  *       - bearerAuth: []
@@ -145,20 +204,9 @@ router.post('/', protect, authorize('admin', 'manager', 'engineer'), createJob);
  *         example: JOB-0001
  *     responses:
  *       200:
- *         description: Job found
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data:
- *                   $ref: '#/components/schemas/JobDetailResponse'
+ *         description: Job found (includes amc_id, amc_title, amc_status, amc_po_number)
  *       404:
  *         description: Job not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id', protect, getJobById);
 
@@ -183,29 +231,23 @@ router.get('/:id', protect, getJobById);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateJobRequest'
+ *             type: object
+ *             properties:
+ *               title:          { type: string }
+ *               description:    { type: string }
+ *               technician_id:  { type: integer }
+ *               amc_id:
+ *                 type: string
+ *                 description: Pass null to unlink, or an AMC ID to link
+ *               priority:       { type: string }
+ *               category:       { type: string }
+ *               scheduled_date: { type: string, format: date }
+ *               amount:         { type: number }
  *     responses:
  *       200:
  *         description: Job updated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 message: { type: string }
- *                 data:
- *                   $ref: '#/components/schemas/JobResponse'
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
  *         description: Job not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.put('/:id', protect, authorize('admin', 'manager', 'engineer'), updateJob);
 
@@ -216,14 +258,6 @@ router.put('/:id', protect, authorize('admin', 'manager', 'engineer'), updateJob
  * /api/jobs/{id}/status:
  *   patch:
  *     summary: Advance job status through the pipeline
- *     description: |
- *       Valid forward-only transitions:
- *       - `Raised` → `Assigned`
- *       - `Assigned` → `In Progress`
- *       - `In Progress` → `Closed`
- *
- *       Technicians can only advance their own assigned jobs.
- *       Closing a job auto-sets `closed_date` and increments the technician's `jobs_completed`.
  *     tags: [Jobs]
  *     security:
  *       - bearerAuth: []
@@ -238,34 +272,19 @@ router.put('/:id', protect, authorize('admin', 'manager', 'engineer'), updateJob
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateJobStatusRequest'
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Raised, Assigned, In Progress, Closed]
  *     responses:
  *       200:
  *         description: Status updated
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 message: { type: string }
- *                 data:
- *                   type: object
- *                   properties:
- *                     id:          { type: string, example: JOB-0001 }
- *                     status:      { type: string, example: In Progress }
- *                     closed_date: { type: string, format: date, nullable: true }
- *                     updated_at:  { type: string, format: date-time }
  *       400:
- *         description: Invalid transition or missing technician
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *         description: Invalid transition
  *       404:
  *         description: Job not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.patch('/:id/status', protect, updateJobStatus);
 
@@ -276,7 +295,6 @@ router.patch('/:id/status', protect, updateJobStatus);
  * /api/jobs/{id}:
  *   delete:
  *     summary: Delete a job (admin only)
- *     description: Cannot delete a job that has attached reports.
  *     tags: [Jobs]
  *     security:
  *       - bearerAuth: []
@@ -289,19 +307,8 @@ router.patch('/:id/status', protect, updateJobStatus);
  *     responses:
  *       200:
  *         description: Job deleted
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/SuccessMessageResponse' }
- *       404:
- *         description: Job not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       409:
  *         description: Job has attached reports
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.delete('/:id', protect, authorize('admin'), deleteJob);
 
@@ -312,10 +319,6 @@ router.delete('/:id', protect, authorize('admin'), deleteJob);
  * /api/jobs/{id}/images:
  *   post:
  *     summary: Add image(s) to a job
- *     description: |
- *       Pass a single image object or an array of image objects.
- *       Actual file upload to S3/storage is handled separately — this endpoint
- *       stores the resulting URL and metadata.
  *     tags: [Jobs]
  *     security:
  *       - bearerAuth: []
@@ -324,31 +327,21 @@ router.delete('/:id', protect, authorize('admin'), deleteJob);
  *         name: id
  *         required: true
  *         schema: { type: string }
- *         example: JOB-0001
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/AddImageRequest'
+ *             type: object
+ *             required: [file_name, file_url]
+ *             properties:
+ *               file_name:       { type: string }
+ *               file_url:        { type: string }
+ *               mime_type:       { type: string }
+ *               file_size_bytes: { type: integer }
  *     responses:
  *       201:
  *         description: Image(s) added
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 message: { type: string }
- *                 data:
- *                   type: array
- *                   items: { $ref: '#/components/schemas/ImageResponse' }
- *       400:
- *         description: Validation error or max images exceeded
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/:id/images', protect, addJobImage);
 
@@ -367,7 +360,6 @@ router.post('/:id/images', protect, addJobImage);
  *         name: id
  *         required: true
  *         schema: { type: string }
- *         example: JOB-0001
  *       - in: path
  *         name: imageId
  *         required: true
@@ -375,14 +367,6 @@ router.post('/:id/images', protect, addJobImage);
  *     responses:
  *       200:
  *         description: Image deleted
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/SuccessMessageResponse' }
- *       404:
- *         description: Job or image not found
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.delete('/:id/images/:imageId', protect, authorize('admin', 'manager'), deleteJobImage);
 
