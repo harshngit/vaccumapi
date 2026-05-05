@@ -906,26 +906,36 @@ const generateReportPdf = async (req, res) => {
     try { puppeteer = require('puppeteer'); } catch (_) { puppeteer = null; }
 
     if (puppeteer) {
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
       try {
-        const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdfBuffer = await page.pdf({
-          format: 'A4',
-          printBackground: true,
-          margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' },
+        const browser = await puppeteer.launch({
+          headless: 'new',
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+          ],
         });
-        res.set({
-          'Content-Type':        'application/pdf',
-          'Content-Disposition': `attachment; filename="ServiceReport_${id}.pdf"`,
-          'Content-Length':       pdfBuffer.length,
-        });
-        return res.send(pdfBuffer);
-      } finally {
-        await browser.close();
+        try {
+          const page = await browser.newPage();
+          await page.setContent(html, { waitUntil: 'networkidle0' });
+          const pdfBuffer = await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' },
+          });
+          res.set({
+            'Content-Type':        'application/pdf',
+            'Content-Disposition': `attachment; filename="ServiceReport_${id}.pdf"`,
+            'Content-Length':       pdfBuffer.length,
+          });
+          return res.send(pdfBuffer);
+        } finally {
+          await browser.close();
+        }
+      } catch (puppeteerErr) {
+        console.error('[Puppeteer] PDF generation failed, falling back to HTML:', puppeteerErr);
+        // Continue to fallback below
       }
     }
 

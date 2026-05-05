@@ -37,6 +37,9 @@ const _buildTransporter = (host, port, user, pass) => {
     pool:           true,
     maxConnections: 3,
     maxMessages:    Infinity,
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 30000,
   });
 
   _transporterKey = key;
