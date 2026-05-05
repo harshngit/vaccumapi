@@ -370,4 +370,4 @@ router.post('/:id/images', protect, addJobImage);
  */
 router.delete('/:id/images/:imageId', protect, authorize('admin', 'manager'), deleteJobImage);
 
-module.exports = router;
+module.exports = router;        
