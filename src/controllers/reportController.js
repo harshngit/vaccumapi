@@ -13,9 +13,7 @@ const { sendNotification } = require('./emailController');
 
 // ─── Helper: generate next report ID ─────────────────────────
 const generateReportId = async (client) => {
-  const result = await client.query(
-    `SELECT id FROM reports ORDER BY id DESC LIMIT 1`
-  );
+  const result = await client.query(`SELECT id FROM reports ORDER BY id DESC LIMIT 1`);
   if (result.rows.length === 0) return 'RPT-0001';
   const lastNum = parseInt(result.rows[0].id.replace('RPT-', ''), 10);
   return `RPT-${String(lastNum + 1).padStart(4, '0')}`;
@@ -27,22 +25,18 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
     d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   const technicalSection = technicalFiles.length > 0 ? `
-    <tr>
-      <td style="padding:14px 20px;border-bottom:1px solid #f0f0f0;">
-        <strong style="color:#374151;">Attached Technical Reports</strong><br/>
-        <ul style="margin:8px 0 0 0;padding-left:18px;">
-          ${technicalFiles.map(f => `<li><a href="${f.file_url}" style="color:#2563eb;">${f.file_name}</a></li>`).join('')}
-        </ul>
-      </td>
-    </tr>` : '';
+    <tr><td style="padding:14px 20px;border-bottom:1px solid #f0f0f0;">
+      <strong style="color:#374151;">Attached Technical Reports</strong><br/>
+      <ul style="margin:8px 0 0 0;padding-left:18px;">
+        ${technicalFiles.map(f => `<li><a href="${f.file_url}" style="color:#2563eb;">${f.file_name}</a></li>`).join('')}
+      </ul>
+    </td></tr>` : '';
 
   const checklistItems = report.checklist_items || [];
   const checklistSection = checklistItems.length > 0 ? `
-    <tr>
-      <td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
-        <strong style="color:#1e40af;font-size:14px;">🔧 Preventive Maintenance Checklist</strong>
-      </td>
-    </tr>
+    <tr><td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
+      <strong style="color:#1e40af;font-size:14px;">Preventive Maintenance Checklist</strong>
+    </td></tr>
     ${checklistItems.map(item => `
     <tr>
       <td style="padding:8px 20px;border-bottom:1px solid #f9f9f9;color:#6b7280;font-size:13px;">${item.sr}. ${item.description}</td>
@@ -51,11 +45,9 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
 
   const issueItems = report.issue_observations || [];
   const issuesSection = issueItems.length > 0 ? `
-    <tr>
-      <td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
-        <strong style="color:#1e40af;font-size:14px;">⚠️ Detailed Issue Observations</strong>
-      </td>
-    </tr>
+    <tr><td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
+      <strong style="color:#1e40af;font-size:14px;">Detailed Issue Observations</strong>
+    </td></tr>
     ${issueItems.map(item => `
     <tr>
       <td style="padding:8px 20px;border-bottom:1px solid #f9f9f9;color:#6b7280;font-size:13px;">${item.issue} — ${item.observation}</td>
@@ -64,103 +56,61 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
 
   const spareItems = report.mandatory_spares || [];
   const sparesSection = spareItems.length > 0 ? `
-    <tr>
-      <td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
-        <strong style="color:#1e40af;font-size:14px;">🛠 Mandatory Spares</strong>
-      </td>
-    </tr>
+    <tr><td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
+      <strong style="color:#1e40af;font-size:14px;">Mandatory Spares</strong>
+    </td></tr>
     ${spareItems.map(s => `
     <tr>
       <td style="padding:8px 20px;border-bottom:1px solid #f9f9f9;color:#6b7280;font-size:13px;">${s.spare_name}</td>
       <td style="padding:8px 20px;border-bottom:1px solid #f9f9f9;color:#111827;font-size:13px;">${s.pump_model || '—'} | Qty: ${s.total_to_order || '—'}</td>
     </tr>`).join('')}` : '';
 
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:30px 0;">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <table width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:30px 0;">
     <tr><td align="center">
-      <table role="presentation" width="600" cellspacing="0" cellpadding="0"
-             style="background:#ffffff;border-radius:10px;overflow:hidden;
-                    box-shadow:0 4px 20px rgba(0,0,0,0.08);max-width:600px;width:100%;">
-        <tr>
-          <td style="background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%);padding:32px 40px;text-align:center;">
-            <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:0.5px;">
-              Vacuum Drying Technology India LLP
-            </h1>
-            <p style="color:#bfdbfe;margin:6px 0 0;font-size:13px;">
-              101, Om Dronagiri, Girivihar Nagar, Borivali (East), Mumbai - 400 066
-            </p>
-            <p style="color:#bfdbfe;margin:4px 0 0;font-size:13px;">AMC Service Report Notification</p>
-          </td>
-        </tr>
+      <table width="600" cellspacing="0" cellpadding="0"
+             style="background:#fff;border-radius:10px;overflow:hidden;max-width:600px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:32px 40px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">Vacuum Drying Technology India LLP</h1>
+          <p style="color:#bfdbfe;margin:6px 0 0;font-size:12px;">101, Om Dronagiri, Girivihar Nagar, Borivali (East), Mumbai - 400 066</p>
+          <p style="color:#bfdbfe;margin:4px 0 0;font-size:12px;">AMC Service Report Notification</p>
+        </td></tr>
         <!-- Greeting -->
-        <tr>
-          <td style="padding:28px 40px 10px;">
-            <p style="color:#111827;font-size:16px;margin:0;">Dear <strong>${report.client_name || 'Valued Client'}</strong>,</p>
-            <p style="color:#4b5563;font-size:14px;line-height:1.7;margin:12px 0 0;">
-              We are pleased to inform you that a service has been completed at your premises.
-              Please find the full AMC service report details below.
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:20px 40px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-                   style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-              <tr style="background:#eff6ff;">
-                <td colspan="2" style="padding:12px 20px;">
-                  <strong style="color:#1e40af;font-size:15px;">Report ID: ${report.id}</strong>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;width:40%;color:#6b7280;font-size:13px;">Company Name</td>
-                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;font-weight:600;">${report.company_name || report.client_name || '—'}</td>
-              </tr>
-              ${report.location ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Location / Site</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.location}</td></tr>` : ''}
-              ${report.contact_person ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Contact Person</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.contact_person}</td></tr>` : ''}
-              ${report.model_serial_installation ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Model / Serial No. / Installation Year</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.model_serial_installation}</td></tr>` : ''}
-              ${report.operating_hours_per_day ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Operating Hours / Day</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.operating_hours_per_day}</td></tr>` : ''}
-              ${report.application_process_description ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Application / Process</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#374151;font-size:14px;">${report.application_process_description}</td></tr>` : ''}
-              ${report.po_number ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">PO Number</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.po_number}</td></tr>` : ''}
-              <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Service Date</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${formatDate(report.report_date)}</td></tr>
-              <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Technician</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.technician_name || '—'}</td></tr>
-              ${checklistSection}
-              ${issuesSection}
-              ${sparesSection}
-              ${report.remarks ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;vertical-align:top;">Remarks</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#374151;font-size:14px;line-height:1.6;">${report.remarks.replace(/\n/g, '<br/>')}</td></tr>` : ''}
-              ${report.findings ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;vertical-align:top;">Findings</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#374151;font-size:14px;line-height:1.6;">${report.findings.replace(/\n/g, '<br/>')}</td></tr>` : ''}
-              ${report.recommendations ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;vertical-align:top;">Recommendations</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#374151;font-size:14px;line-height:1.6;">${report.recommendations.replace(/\n/g, '<br/>')}</td></tr>` : ''}
-              ${report.comments ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;vertical-align:top;">Comments</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#374151;font-size:14px;line-height:1.6;">${report.comments.replace(/\n/g, '<br/>')}</td></tr>` : ''}
-              ${report.vdt_representative_name || report.client_representative_name ? `
-              <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">VDT Representative</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.vdt_representative_name || '—'}</td></tr>
-              <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Client Representative</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.client_representative_name || '—'}</td></tr>` : ''}
-              ${technicalSection}
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:0 40px 20px;">
-            <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:12px 16px;">
-              <span style="color:#92400e;font-size:13px;">
-                <strong>Status:</strong> This report is currently under review by our team.
-              </span>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td style="background:#f9fafb;padding:24px 40px;border-top:1px solid #e5e7eb;">
-            <p style="color:#6b7280;font-size:13px;margin:0 0 8px;">
-              If you have any questions, please contact us at
-              <a href="mailto:info@electromechengineering.com" style="color:#2563eb;">info@electromechengineering.com</a>
-              or call 9833594555 / 9819982801.
-            </p>
-            <p style="color:#374151;font-size:13px;margin:0;font-weight:600;">Vacuum Drying Technology India LLP</p>
-            <p style="color:#9ca3af;font-size:11px;margin:12px 0 0;">This is an automated notification. Please do not reply directly to this email.</p>
-          </td>
-        </tr>
+        <tr><td style="padding:28px 40px 10px;">
+          <p style="color:#111827;font-size:16px;margin:0;">Dear <strong>${report.client_name || 'Valued Client'}</strong>,</p>
+          <p style="color:#4b5563;font-size:14px;line-height:1.7;margin:12px 0 0;">
+            A service has been completed at your premises. Please find the full AMC service report details below.
+          </p>
+        </td></tr>
+        <tr><td style="padding:20px 40px;">
+          <table width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <tr style="background:#eff6ff;">
+              <td colspan="2" style="padding:12px 20px;">
+                <strong style="color:#1e40af;font-size:15px;">Report ID: ${report.id}</strong>
+              </td>
+            </tr>
+            <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;width:40%;color:#6b7280;font-size:13px;">Company Name</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;font-weight:600;">${report.company_name || report.client_name || '—'}</td></tr>
+            ${report.contact_person ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Contact Person</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.contact_person}</td></tr>` : ''}
+            ${report.model_serial_installation ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Model / S/N / Year</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.model_serial_installation}</td></tr>` : ''}
+            ${report.po_number ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">PO Number</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.po_number}</td></tr>` : ''}
+            <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Service Date</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${formatDate(report.report_date)}</td></tr>
+            <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Technician</td>
+                <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.technician_name || '—'}</td></tr>
+            ${checklistSection}${issuesSection}${sparesSection}
+            ${report.remarks ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;vertical-align:top;">Remarks</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#374151;font-size:14px;line-height:1.6;">${report.remarks.replace(/\n/g,'<br/>')}</td></tr>` : ''}
+          </table>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:24px 40px;border-top:1px solid #e5e7eb;">
+          <p style="color:#6b7280;font-size:13px;margin:0 0 8px;">
+            Questions? Contact us at <a href="mailto:info@electromechengineering.com" style="color:#2563eb;">info@electromechengineering.com</a> or call 9833594555 / 9819982801.
+          </p>
+          <p style="color:#374151;font-size:13px;margin:0;font-weight:600;">Vacuum Drying Technology India LLP</p>
+        </td></tr>
       </table>
     </td></tr>
   </table>
@@ -168,7 +118,10 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
 </html>`;
 };
 
-// ─── Helper: generate PDF using pdfkit (no system deps, works on Render) ─────
+// ────────────────────────────────────────────────────────────
+// PDF GENERATION — exact replica of the original VDT form
+// Black & white, clean table layout, real checkboxes
+// ────────────────────────────────────────────────────────────
 const generatePdfBuffer = (report) => {
   return new Promise((resolve, reject) => {
     try {
@@ -179,400 +132,514 @@ const generatePdfBuffer = (report) => {
         size: 'A4',
         margins: { top: 40, bottom: 40, left: 45, right: 45 },
         info: {
-          Title: `AMC Service Report - ${report.id}`,
+          Title: `Service Report - ${report.id}`,
           Author: 'Vacuum Drying Technology India LLP',
-          Subject: report.title || 'AMC Service Report',
         },
       });
 
-      doc.on('data', chunk => chunks.push(chunk));
-      doc.on('end',  ()    => resolve(Buffer.concat(chunks)));
-      doc.on('error', err  => reject(err));
+      doc.on('data', c => chunks.push(c));
+      doc.on('end',  () => resolve(Buffer.concat(chunks)));
+      doc.on('error', e => reject(e));
+
+      const L  = 45;           // left margin
+      const R  = 45;           // right margin
+      const PW = 595 - L - R;  // A4 width = 595 — usable width = 505
+      const BLACK = '#000000';
+      const GRAY  = '#555555';
 
       const formatDate = (d) =>
-        d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+        d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
-      const pageWidth  = doc.page.width  - doc.page.margins.left - doc.page.margins.right;
-      const COLOR_BLUE = '#1e3a8a';
-      const COLOR_GRAY = '#6b7280';
-      const COLOR_BLACK = '#111827';
-      const COLOR_LIGHT = '#f3f4f6';
-      const COLOR_BORDER = '#d1d5db';
+      // ── Draw a border rect ──────────────────────────────────
+      const border = (x, y, w, h) =>
+        doc.rect(x, y, w, h).strokeColor(BLACK).lineWidth(0.5).stroke();
 
-      // ── Helper: draw a horizontal rule ───────────────────────
-      const hRule = (y, color = COLOR_BORDER) => {
-        doc.moveTo(doc.page.margins.left, y)
-           .lineTo(doc.page.margins.left + pageWidth, y)
-           .strokeColor(color).lineWidth(0.5).stroke();
+      // ── Draw horizontal line ────────────────────────────────
+      const hline = (x1, y, x2, lw = 0.5) =>
+        doc.moveTo(x1, y).lineTo(x2, y).strokeColor(BLACK).lineWidth(lw).stroke();
+
+      // ── Draw vertical line ──────────────────────────────────
+      const vline = (x, y1, y2, lw = 0.5) =>
+        doc.moveTo(x, y1).lineTo(x, y2).strokeColor(BLACK).lineWidth(lw).stroke();
+
+      // ── Draw a checkbox (empty square, or filled black square)
+      const checkbox = (x, y, filled) => {
+        const S = 7;
+        doc.rect(x, y, S, S).strokeColor(BLACK).lineWidth(0.6).stroke();
+        if (filled) {
+          doc.rect(x + 1, y + 1, S - 2, S - 2).fillColor(BLACK).fill();
+        }
       };
 
-      // ── Helper: draw a filled rect ───────────────────────────
-      const fillRect = (x, y, w, h, color) => {
-        doc.rect(x, y, w, h).fillColor(color).fill();
+      // ── Draw a tick mark ✓ ──────────────────────────────────
+      const tick = (x, y) => {
+        doc.fontSize(10).fillColor(BLACK).font('Helvetica-Bold').text('✓', x, y);
       };
 
-      // ── Helper: two-column info row ──────────────────────────
-      const infoRow = (label, value, y) => {
-        doc.fontSize(8).fillColor(COLOR_GRAY)
-           .text(label, doc.page.margins.left, y, { width: 160 });
-        doc.fontSize(9).fillColor(COLOR_BLACK)
-           .text(value || '—', doc.page.margins.left + 170, y, { width: pageWidth - 170 });
-        return y + 18;
+      // ── Page header: large bold title + address ─────────────
+      const drawPageHeader = () => {
+        let y = 40;
+        doc.fontSize(22).fillColor(BLACK).font('Helvetica-Bold')
+           .text('Vacuum Drying Technology India LLP', L, y, { width: PW, align: 'center' });
+        y += 28;
+        doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+           .text('101, Om Dronagiri, Girivihar Nagar, Shantivan, opp. Western Express Highway, Borivali (East), Mumbai - 400 066.', L, y, { width: PW, align: 'center' });
+        y += 11;
+        doc.fontSize(8).text('Contact No. : 9833594555 / 9819982801', L, y, { width: PW, align: 'center' });
+        y += 11;
+        doc.fontSize(8).text('Email : info@electromechengineering.com / clientservices@electromechengineering.com', L, y, { width: PW, align: 'center' });
+        y += 14;
+        hline(L, y, L + PW, 1.2);
+        return y + 10;
       };
 
-      // ── HEADER ───────────────────────────────────────────────
-      fillRect(0, 0, doc.page.width, 80, COLOR_BLUE);
-      doc.fontSize(16).fillColor('#ffffff').font('Helvetica-Bold')
-         .text('Vacuum Drying Technology India LLP', doc.page.margins.left, 18, { width: pageWidth, align: 'center' });
-      doc.fontSize(8).fillColor('#bfdbfe').font('Helvetica')
-         .text('101, Om Dronagiri, Girivihar Nagar, Shantivan, opp. Western Express Highway, Borivali (East), Mumbai - 400 066.', doc.page.margins.left, 40, { width: pageWidth, align: 'center' });
-      doc.fontSize(8).fillColor('#bfdbfe')
-         .text('Contact No.: 9833594555 / 9819982801  |  Email: info@electromechengineering.com', doc.page.margins.left, 55, { width: pageWidth, align: 'center' });
+      // ────────────────────────────────────────────────────────
+      // PAGE 1
+      // ────────────────────────────────────────────────────────
+      let y = drawPageHeader();
 
-      let y = 95;
-
-      // ── Section: AMC Service Report Title ───────────────────
-      doc.fontSize(12).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-         .text('AMC Service Report - Italvacuum Pump', doc.page.margins.left, y, { width: pageWidth, align: 'center' });
-      y += 20;
-      hRule(y); y += 8;
-
-      // ── Report ID + Status pill ──────────────────────────────
-      doc.fontSize(9).fillColor(COLOR_GRAY).font('Helvetica')
-         .text('Report ID:', doc.page.margins.left, y);
-      doc.fontSize(9).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-         .text(report.id, doc.page.margins.left + 60, y);
-
-      const statusColors = { Approved: '#16a34a', Rejected: '#dc2626', Pending: '#d97706' };
-      const statusColor  = statusColors[report.status] || '#d97706';
-      doc.roundedRect(doc.page.margins.left + pageWidth - 70, y - 2, 68, 14, 4)
-         .fillColor(statusColor).fill();
-      doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold')
-         .text(report.status, doc.page.margins.left + pageWidth - 70, y + 1, { width: 68, align: 'center' });
-
-      y += 22;
-      hRule(y); y += 10;
-
-      // ── Client Info table ────────────────────────────────────
-      doc.fontSize(10).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-         .text('Client & Report Information', doc.page.margins.left, y);
-      y += 14;
-
-      // Table header
-      fillRect(doc.page.margins.left, y, pageWidth, 18, COLOR_BLUE);
-      doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold')
-         .text('Field', doc.page.margins.left + 6, y + 4, { width: 160 })
-         .text('Details', doc.page.margins.left + 170, y + 4, { width: pageWidth - 170 });
+      // ── AMC Service Report title ─────────────────────────────
+      doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+         .text('AMC Service Report - Italvacuum Pump', L, y, { width: PW, align: 'center' });
       y += 18;
 
-      // Alternating rows
-      const infoRows = [
-        ['Company Name',                   report.company_name || report.client_name],
-        ['Location / Site',                report.location],
-        ['Contact Person',                 report.contact_person],
-        ['Model - Serial No. - Inst. Year', report.model_serial_installation],
-        ['Operating Hours / Day',          report.operating_hours_per_day],
-        ['Application / Process',          report.application_process_description],
-        ['PO Number',                      report.po_number],
-        ['Serial No.',                     report.serial_no],
-        ['Report Date',                    formatDate(report.report_date)],
-        ['Technician',                     report.technician_name],
-        ['Client Email',                   report.client_email],
-      ].filter(r => r[1]);
+      // ── Client info table ────────────────────────────────────
+      // Columns: Field 45% | Details 55%
+      const COL1 = Math.round(PW * 0.42);
+      const COL2 = PW - COL1;
+      const ROW_H = 22;
 
-      infoRows.forEach(([label, value], i) => {
-        if (y > 740) { doc.addPage(); y = 50; }
-        if (i % 2 === 0) fillRect(doc.page.margins.left, y, pageWidth, 18, '#f9fafb');
-        doc.rect(doc.page.margins.left, y, pageWidth, 18).strokeColor(COLOR_BORDER).lineWidth(0.3).stroke();
-        doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica')
-           .text(label, doc.page.margins.left + 6, y + 4, { width: 160 });
-        doc.fontSize(8).fillColor(COLOR_BLACK).font('Helvetica')
-           .text(String(value || '—'), doc.page.margins.left + 170, y + 4, { width: pageWidth - 176 });
-        y += 18;
+      const clientRows = [
+        ['Company Name',                   report.company_name || report.client_name || ''],
+        ['Location / Site',                report.location || ''],
+        ['Contact Person',                 report.contact_person || ''],
+        ['Madel - Serial No. - Installation Year', report.model_serial_installation || ''],
+        ['Operating Hours / Day',          report.operating_hours_per_day || ''],
+        ['Application / Process Description', report.application_process_description || ''],
+      ];
+
+      // Header row
+      border(L, y, PW, ROW_H);
+      vline(L + COL1, y, y + ROW_H);
+      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
+         .text('Field',   L + 5,         y + 6, { width: COL1 - 10 })
+         .text('Details', L + COL1 + 5,  y + 6, { width: COL2 - 10 });
+      y += ROW_H;
+
+      clientRows.forEach(([label, val]) => {
+        const cellH = ROW_H;
+        border(L, y, PW, cellH);
+        vline(L + COL1, y, y + cellH);
+        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+           .text(label, L + 5, y + 6, { width: COL1 - 10 })
+           .text(val,   L + COL1 + 5, y + 6, { width: COL2 - 10 });
+        y += cellH;
       });
 
-      y += 12;
+      y += 16;
 
-      // ── Checklist ────────────────────────────────────────────
-      const checklistItems = report.checklist_items || [];
-      if (checklistItems.length > 0) {
-        if (y > 650) { doc.addPage(); y = 50; }
+      // ── Checklist section ────────────────────────────────────
+      doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+         .text('Checklist (Routine Preventive Maintenance)', L, y, { width: PW, align: 'center' });
+      y += 14;
 
-        doc.fontSize(10).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-           .text('Checklist (Routine Preventive Maintenance)', doc.page.margins.left, y);
-        y += 14;
+      // All 9 checklist items from PDF with their options
+      const ALL_CHECKLIST = [
+        { sr: 1, description: 'Check the oil level in the oil reserves.',                        options: ['OK', 'Topped Up'] },
+        { sr: 2, description: 'Check the oil level on the Root Compressors (If available).',     options: ['OK', 'Topped Up', 'NA'] },
+        { sr: 3, description: 'Check the lubrication circuit.',                                  options: ['Normal', 'Leakage', 'Blockage'] },
+        { sr: 4, description: 'Check the discharge valves.',                                     options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
+        { sr: 5, description: 'Check & adjust the Gland packing.',                              options: ['OK', 'Adjusted / Replaced', 'Spare Required'] },
+        { sr: 6, description: 'Oil filter cleaning.',                                           options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
+        { sr: 7, description: 'Greasing of the pump.',                                          options: ['OK', 'Done'] },
+        { sr: 8, description: 'Check the oil seal Ring.',                                       options: ['OK', 'Replaced', 'Spare Required'] },
+        { sr: 9, description: 'Check & adjustment of the driving belts.',                       options: ['OK', 'Replaced', 'Spare Required'] },
+      ];
 
-        // Table header
-        fillRect(doc.page.margins.left, y, pageWidth, 18, COLOR_BLUE);
-        doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold')
-           .text('SR', doc.page.margins.left + 4, y + 4, { width: 25 })
-           .text('Description', doc.page.margins.left + 32, y + 4, { width: pageWidth - 130 })
-           .text('Status', doc.page.margins.left + pageWidth - 94, y + 4, { width: 90 });
-        y += 18;
+      // Build lookup from sr → selected status
+      const checklistMap = {};
+      (report.checklist_items || []).forEach(item => {
+        checklistMap[item.sr] = item.status || '';
+      });
 
-        checklistItems.forEach((item, i) => {
-          if (y > 750) { doc.addPage(); y = 50; }
-          const rowH = 18;
-          if (i % 2 === 0) fillRect(doc.page.margins.left, y, pageWidth, rowH, '#f9fafb');
-          doc.rect(doc.page.margins.left, y, pageWidth, rowH).strokeColor(COLOR_BORDER).lineWidth(0.3).stroke();
+      // Table header
+      const SR_W   = 28;
+      const DESC_W = Math.round(PW * 0.52);
+      const STAT_W = PW - SR_W - DESC_W;
 
-          doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica')
-             .text(String(item.sr), doc.page.margins.left + 4, y + 4, { width: 25 });
-          doc.fontSize(8).fillColor(COLOR_BLACK).font('Helvetica')
-             .text(item.description || '', doc.page.margins.left + 32, y + 4, { width: pageWidth - 130 });
+      border(L, y, PW, ROW_H);
+      vline(L + SR_W,          y, y + ROW_H);
+      vline(L + SR_W + DESC_W, y, y + ROW_H);
+      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
+         .text('SR',          L + 8,                    y + 6, { width: SR_W - 10 })
+         .text('Description', L + SR_W + 5,             y + 6, { width: DESC_W - 10 })
+         .text('Status',      L + SR_W + DESC_W + 5,    y + 6, { width: STAT_W - 10 });
+      y += ROW_H;
 
-          if (item.status) {
-            const statusBg = item.status.toLowerCase().includes('ok') ? '#dcfce7' :
-                             item.status.toLowerCase().includes('spare') ? '#fef3c7' : '#eff6ff';
-            const statusFg = item.status.toLowerCase().includes('ok') ? '#15803d' :
-                             item.status.toLowerCase().includes('spare') ? '#92400e' : '#1e40af';
-            doc.roundedRect(doc.page.margins.left + pageWidth - 94, y + 2, 90, 13, 3)
-               .fillColor(statusBg).fill();
-            doc.fontSize(7).fillColor(statusFg).font('Helvetica-Bold')
-               .text(item.status, doc.page.margins.left + pageWidth - 94, y + 4, { width: 90, align: 'center' });
-          }
-          y += rowH;
-        });
+      ALL_CHECKLIST.forEach(item => {
+        const selectedStatus = checklistMap[item.sr] || '';
 
-        // Site & Environmental Conditions note
-        y += 10;
-        if (y > 680) { doc.addPage(); y = 50; }
-        fillRect(doc.page.margins.left, y, pageWidth, 72, '#fffbeb');
-        doc.rect(doc.page.margins.left, y, pageWidth, 72).strokeColor('#fbbf24').lineWidth(0.5).stroke();
-        doc.fontSize(8).fillColor('#92400e').font('Helvetica-Bold')
-           .text('Site & Environmental Conditions', doc.page.margins.left + 8, y + 6);
-        doc.fontSize(7.5).fillColor('#78350f').font('Helvetica')
-           .text('• Maintain the pump installation area in a clean, dry and workable environment.', doc.page.margins.left + 8, y + 18)
-           .text('• Ensure proper ventilation, lighting and access for maintenance activities.', doc.page.margins.left + 8, y + 30)
-           .text('• Prevent the accumulation of dust, chemicals, solvents, vapours or waste material near the pump.', doc.page.margins.left + 8, y + 42)
-           .text('• Maintain environmental cleanliness of the pump, motor and accessories at all times.', doc.page.margins.left + 8, y + 54);
-        y += 82;
-        doc.fontSize(7).fillColor(COLOR_GRAY).font('Helvetica')
-           .text('Note: Client is obliged to maintain the above points.', doc.page.margins.left, y);
-        y += 16;
-      }
+        // Rows 4, 5, 6 need extra height for two-line status options
+        const needsTwoLines = [4, 5, 6].includes(item.sr);
+        const cellH = needsTwoLines ? 36 : ROW_H;
 
-      // ── Issue Observation Matrix ─────────────────────────────
+        if (y + cellH > 780) {
+          doc.addPage();
+          y = drawPageHeader();
+        }
+
+        border(L, y, PW, cellH);
+        vline(L + SR_W,          y, y + cellH);
+        vline(L + SR_W + DESC_W, y, y + cellH);
+
+        // SR number
+        doc.fontSize(9).fillColor(BLACK).font('Helvetica')
+           .text(String(item.sr), L + 8, y + (cellH / 2) - 5, { width: SR_W - 10 });
+
+        // Description
+        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+           .text(item.description, L + SR_W + 5, y + (cellH / 2) - 5, { width: DESC_W - 10 });
+
+        // Status checkboxes — row 4,5,6 have two lines
+        const statusX = L + SR_W + DESC_W + 6;
+        if (!needsTwoLines) {
+          // Single row: all options on one line
+          let cx = statusX;
+          item.options.forEach((opt) => {
+            const filled = selectedStatus === opt;
+            checkbox(cx, y + 7, filled);
+            doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+               .text(opt, cx + 10, y + 7, { width: STAT_W - (cx - statusX) - 15, lineBreak: false });
+            // Estimate text width for spacing
+            cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
+          });
+        } else {
+          // Two lines: row 1 has first two options, row 2 has "Spare Required"
+          const topOpts   = item.options.slice(0, 2); // OK + Cleaned/Adjusted
+          const btmOpts   = item.options.slice(2);    // Spare Required
+          let cx = statusX;
+          topOpts.forEach((opt) => {
+            const filled = selectedStatus === opt;
+            checkbox(cx, y + 5, filled);
+            doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+               .text(opt, cx + 10, y + 5, { lineBreak: false });
+            cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
+          });
+          cx = statusX;
+          btmOpts.forEach((opt) => {
+            const filled = selectedStatus === opt;
+            checkbox(cx, y + 21, filled);
+            doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+               .text(opt, cx + 10, y + 21, { lineBreak: false });
+            cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
+          });
+        }
+
+        y += cellH;
+      });
+
+      y += 14;
+
+      // ── Site & Environmental Conditions ─────────────────────
+      if (y + 90 > 780) { doc.addPage(); y = drawPageHeader(); }
+
+      const envLines = [
+        'Maintain the pump installation area in a clean, dry and workable environment.',
+        'Ensure proper ventilation, lighting and access for maintenance activities.',
+        'Prevent the accumulation of dust, chemicals, solvents, vapours or waste material near the pump.',
+        'Maintain environmental cleanliness of the pump, motor and accessories at all times.',
+      ];
+      const envBoxH = 14 + envLines.length * 14 + 6;
+      border(L, y, PW, envBoxH);
+
+      // Header row of env box
+      hline(L, y + 18, L + PW);
+      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
+         .text('Site & Environmental Conditions', L + 5, y + 5, { width: PW - 10, align: 'center' });
+
+      let ey = y + 22;
+      envLines.forEach(line => {
+        doc.fontSize(8).fillColor(BLACK).font('Helvetica').text(line, L + 8, ey, { width: PW - 16 });
+        ey += 14;
+      });
+      y += envBoxH + 6;
+
+      doc.fontSize(7.5).fillColor(GRAY).font('Helvetica')
+         .text('Note : Client is obliged to maintain the above points.', L, y);
+      y += 14;
+
+
+      // ────────────────────────────────────────────────────────
+      // PAGE 2: ISSUE OBSERVATION MATRIX
+      // ────────────────────────────────────────────────────────
       const issueItems = report.issue_observations || [];
+
       if (issueItems.length > 0) {
         doc.addPage();
-        y = 50;
+        y = drawPageHeader();
 
-        // Repeat header on new page
-        fillRect(0, 0, doc.page.width, 60, COLOR_BLUE);
-        doc.fontSize(14).fillColor('#ffffff').font('Helvetica-Bold')
-           .text('Vacuum Drying Technology India LLP', doc.page.margins.left, 14, { width: pageWidth, align: 'center' });
-        doc.fontSize(7.5).fillColor('#bfdbfe').font('Helvetica')
-           .text('101, Om Dronagiri, Girivihar Nagar, Shantivan, opp. Western Express Highway, Borivali (East), Mumbai - 400 066.', doc.page.margins.left, 32, { width: pageWidth, align: 'center' });
-        doc.fontSize(7.5).fillColor('#bfdbfe')
-           .text('Contact No.: 9833594555 / 9819982801', doc.page.margins.left, 44, { width: pageWidth, align: 'center' });
-
-        y = 76;
-        doc.fontSize(11).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-           .text('Detailed Issue - Observation - Impact Matrix', doc.page.margins.left, y, { width: pageWidth, align: 'center' });
-        y += 18;
+        doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+           .text('Detailed Issue - Observation - Impact Matrix', L, y, { width: PW, align: 'center' });
+        y += 16;
 
         // Column widths
-        const COL = {
-          sr:      28,
-          issue:   80,
-          obs:     130,
-          impact:  110,
-          sev:     40,
-          spares:  pageWidth - 28 - 80 - 130 - 110 - 40,
+        const IC = {
+          sr:     28,
+          issue:  70,
+          obs:    125,
+          impact: 105,
+          sev:    42,
         };
-        const colX = {
-          sr:     doc.page.margins.left,
-          issue:  doc.page.margins.left + COL.sr,
-          obs:    doc.page.margins.left + COL.sr + COL.issue,
-          impact: doc.page.margins.left + COL.sr + COL.issue + COL.obs,
-          sev:    doc.page.margins.left + COL.sr + COL.issue + COL.obs + COL.impact,
-          spares: doc.page.margins.left + COL.sr + COL.issue + COL.obs + COL.impact + COL.sev,
+        IC.spares = PW - IC.sr - IC.issue - IC.obs - IC.impact - IC.sev;
+
+        const IX = {
+          sr:     L,
+          issue:  L + IC.sr,
+          obs:    L + IC.sr + IC.issue,
+          impact: L + IC.sr + IC.issue + IC.obs,
+          sev:    L + IC.sr + IC.issue + IC.obs + IC.impact,
+          spares: L + IC.sr + IC.issue + IC.obs + IC.impact + IC.sev,
         };
 
         // Header row
-        fillRect(doc.page.margins.left, y, pageWidth, 20, COLOR_BLUE);
-        doc.fontSize(7.5).fillColor('#ffffff').font('Helvetica-Bold');
-        [['SR', colX.sr, COL.sr], ['Issue', colX.issue, COL.issue], ['Observation', colX.obs, COL.obs],
-         ['Impact on Pump', colX.impact, COL.impact], ['Sev.', colX.sev, COL.sev], ['Recommended Spares', colX.spares, COL.spares]]
-          .forEach(([label, x, w]) => {
-            doc.text(label, x + 3, y + 5, { width: w - 6 });
-          });
-        y += 20;
+        const IHH = 20;
+        border(L, y, PW, IHH);
+        Object.values(IX).slice(1).forEach(x => vline(x, y, y + IHH));
+
+        doc.fontSize(8).fillColor(BLACK).font('Helvetica-Bold')
+           .text('SR',                  IX.sr     + 3, y + 5, { width: IC.sr - 6 })
+           .text('Issue',               IX.issue  + 3, y + 5, { width: IC.issue - 6 })
+           .text('Observation',         IX.obs    + 3, y + 5, { width: IC.obs - 6 })
+           .text('Impact on Pump',      IX.impact + 3, y + 5, { width: IC.impact - 6 })
+           .text('Severity',            IX.sev    + 3, y + 5, { width: IC.sev - 6 })
+           .text('Recommended Spares',  IX.spares + 3, y + 5, { width: IC.spares - 6 });
+        y += IHH;
 
         issueItems.forEach((obs, i) => {
-          if (y > 730) {
-            doc.addPage(); y = 50;
-            // Mini header on continuation page
-            fillRect(doc.page.margins.left, y, pageWidth, 16, COLOR_BLUE);
-            doc.fontSize(7).fillColor('#ffffff').font('Helvetica-Bold');
-            [['SR', colX.sr, COL.sr], ['Issue', colX.issue, COL.issue], ['Observation', colX.obs, COL.obs],
-             ['Impact on Pump', colX.impact, COL.impact], ['Sev.', colX.sev, COL.sev], ['Recommended Spares', colX.spares, COL.spares]]
-              .forEach(([label, x, w]) => doc.text(label, x + 3, y + 3, { width: w - 6 }));
-            y += 16;
+          // Estimate row height based on text wrapping
+          const maxCellText = Math.max(
+            doc.heightOfString(obs.observation || '', { width: IC.obs - 6, fontSize: 8.5 }),
+            doc.heightOfString(obs.impact_on_pump || '', { width: IC.impact - 6, fontSize: 8.5 }),
+            doc.heightOfString(obs.recommended_spares || '', { width: IC.spares - 6, fontSize: 8.5 }),
+            18
+          );
+          const rowH = maxCellText + 10;
+
+          if (y + rowH > 780) {
+            doc.addPage();
+            y = drawPageHeader();
+            // mini col headers on continued page
+            border(L, y, PW, IHH);
+            Object.values(IX).slice(1).forEach(x => vline(x, y, y + IHH));
+            doc.fontSize(8).fillColor(BLACK).font('Helvetica-Bold')
+               .text('SR', IX.sr + 3, y + 5, { width: IC.sr - 6 })
+               .text('Issue', IX.issue + 3, y + 5, { width: IC.issue - 6 })
+               .text('Observation', IX.obs + 3, y + 5, { width: IC.obs - 6 })
+               .text('Impact on Pump', IX.impact + 3, y + 5, { width: IC.impact - 6 })
+               .text('Severity', IX.sev + 3, y + 5, { width: IC.sev - 6 })
+               .text('Recommended Spares', IX.spares + 3, y + 5, { width: IC.spares - 6 });
+            y += IHH;
           }
 
-          const rowH = 22;
-          if (i % 2 === 0) fillRect(doc.page.margins.left, y, pageWidth, rowH, '#f9fafb');
-          doc.rect(doc.page.margins.left, y, pageWidth, rowH).strokeColor(COLOR_BORDER).lineWidth(0.3).stroke();
+          border(L, y, PW, rowH);
+          Object.values(IX).slice(1).forEach(x => vline(x, y, y + rowH));
 
-          doc.fontSize(7.5).fillColor(COLOR_GRAY).font('Helvetica')
-             .text(String(obs.sr || i + 1), colX.sr + 3, y + 5, { width: COL.sr - 6 });
-          doc.fontSize(7.5).fillColor(COLOR_BLACK).font('Helvetica-Bold')
-             .text(obs.issue || '—', colX.issue + 3, y + 5, { width: COL.issue - 6 });
-          doc.fontSize(7.5).fillColor(COLOR_BLACK).font('Helvetica')
-             .text(obs.observation || '—', colX.obs + 3, y + 5, { width: COL.obs - 6 })
-             .text(obs.impact_on_pump || '—', colX.impact + 3, y + 5, { width: COL.impact - 6 });
+          doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+             .text(String(obs.sr || i + 1),   IX.sr     + 3, y + 5, { width: IC.sr - 6 })
+             .text(obs.issue || '',            IX.issue  + 3, y + 5, { width: IC.issue - 6 })
+             .text(obs.observation || '',      IX.obs    + 3, y + 5, { width: IC.obs - 6 })
+             .text(obs.impact_on_pump || '',   IX.impact + 3, y + 5, { width: IC.impact - 6 })
+             .text(obs.severity || '',         IX.sev    + 3, y + 5, { width: IC.sev - 6 })
+             .text(obs.recommended_spares || '', IX.spares + 3, y + 5, { width: IC.spares - 6 });
 
-          if (obs.severity) {
-            const sevBg = obs.severity === 'High' ? '#fee2e2' : obs.severity === 'Med' ? '#fef3c7' : '#dcfce7';
-            const sevFg = obs.severity === 'High' ? '#dc2626' : obs.severity === 'Med' ? '#92400e' : '#15803d';
-            doc.roundedRect(colX.sev + 2, y + 4, COL.sev - 4, 13, 3).fillColor(sevBg).fill();
-            doc.fontSize(7).fillColor(sevFg).font('Helvetica-Bold')
-               .text(obs.severity, colX.sev + 2, y + 7, { width: COL.sev - 4, align: 'center' });
-          } else {
-            doc.fontSize(7.5).fillColor(COLOR_GRAY).font('Helvetica')
-               .text('—', colX.sev + 3, y + 5, { width: COL.sev - 6 });
+          // Tick mark beside selected issue row
+          if (obs.issue || obs.observation) {
+            tick(IX.sr - 12, y + 5);
           }
-
-          doc.fontSize(7.5).fillColor(COLOR_BLACK).font('Helvetica')
-             .text(obs.recommended_spares || '—', colX.spares + 3, y + 5, { width: COL.spares - 6 });
 
           y += rowH;
         });
-      }
 
-      // ── Remarks ──────────────────────────────────────────────
-      if (report.remarks || report.findings || report.recommendations || report.comments) {
-        y += 12;
-        if (y > 680) { doc.addPage(); y = 50; }
-
-        doc.fontSize(10).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-           .text('Remarks & Findings', doc.page.margins.left, y);
-        y += 12; hRule(y); y += 8;
-
-        const textFields = [
-          ['Remarks',         report.remarks],
-          ['Findings',        report.findings],
-          ['Recommendations', report.recommendations],
-          ['Comments',        report.comments],
-        ].filter(f => f[1]);
-
-        textFields.forEach(([label, value]) => {
-          if (y > 700) { doc.addPage(); y = 50; }
-          doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica-Bold').text(label + ':', doc.page.margins.left, y);
-          y += 12;
-          fillRect(doc.page.margins.left, y, pageWidth, 2, COLOR_BORDER);
-          doc.fontSize(8.5).fillColor(COLOR_BLACK).font('Helvetica')
-             .text(value, doc.page.margins.left + 4, y + 6, { width: pageWidth - 8 });
-          const textH = doc.heightOfString(value, { width: pageWidth - 8 });
-          y += textH + 20;
-        });
-      }
-
-      // ── Mandatory Spares ─────────────────────────────────────
-      const spareItems = report.mandatory_spares || [];
-      if (spareItems.length > 0) {
-        doc.addPage();
-        y = 50;
-
-        // Repeat header
-        fillRect(0, 0, doc.page.width, 60, COLOR_BLUE);
-        doc.fontSize(14).fillColor('#ffffff').font('Helvetica-Bold')
-           .text('Vacuum Drying Technology India LLP', doc.page.margins.left, 14, { width: pageWidth, align: 'center' });
-        doc.fontSize(7.5).fillColor('#bfdbfe').font('Helvetica')
-           .text('101, Om Dronagiri, Girivihar Nagar, Shantivan, opp. Western Express Highway, Borivali (East), Mumbai - 400 066.', doc.page.margins.left, 32, { width: pageWidth, align: 'center' });
-        doc.fontSize(7.5).fillColor('#bfdbfe')
-           .text('Contact No.: 9833594555 / 9819982801', doc.page.margins.left, 44, { width: pageWidth, align: 'center' });
-
-        y = 76;
-        doc.fontSize(11).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-           .text('Mandatory Spares - AMC Compliance Matrix', doc.page.margins.left, y, { width: pageWidth, align: 'center' });
-        y += 18;
-
-        const SW = { name: pageWidth - 160, model: 110, qty: 50 };
-        const SX = {
-          name:  doc.page.margins.left,
-          model: doc.page.margins.left + SW.name,
-          qty:   doc.page.margins.left + SW.name + SW.model,
-        };
-
-        fillRect(doc.page.margins.left, y, pageWidth, 20, COLOR_BLUE);
-        doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold')
-           .text('Spare Name',   SX.name  + 4, y + 5, { width: SW.name - 8 })
-           .text('Pump Model',  SX.model + 4, y + 5, { width: SW.model - 8 })
-           .text('Qty to Order', SX.qty  + 4, y + 5, { width: SW.qty - 8 });
         y += 20;
 
-        spareItems.forEach((s, i) => {
-          if (y > 750) { doc.addPage(); y = 50; }
-          const rowH = 18;
-          if (i % 2 === 0) fillRect(doc.page.margins.left, y, pageWidth, rowH, '#f9fafb');
-          doc.rect(doc.page.margins.left, y, pageWidth, rowH).strokeColor(COLOR_BORDER).lineWidth(0.3).stroke();
-          doc.fontSize(8).fillColor(COLOR_BLACK).font('Helvetica')
-             .text(s.spare_name || '—', SX.name + 4, y + 4, { width: SW.name - 8 });
-          doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica')
-             .text(s.pump_model || '—', SX.model + 4, y + 4, { width: SW.model - 8 })
-             .text(s.total_to_order || '—', SX.qty + 4, y + 4, { width: SW.qty - 8 });
-          y += rowH;
-        });
+        // ── Remarks section — lines for writing ───────────────
+        if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
 
-        // Compliance notes
-        y += 14;
-        if (y > 660) { doc.addPage(); y = 50; }
-        fillRect(doc.page.margins.left, y, pageWidth, 80, '#eff6ff');
-        doc.rect(doc.page.margins.left, y, pageWidth, 80).strokeColor('#93c5fd').lineWidth(0.5).stroke();
-        doc.fontSize(8).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-           .text('Commercial & Compliance Notes (AMC Aligned)', doc.page.margins.left + 8, y + 6);
-        doc.fontSize(7.5).fillColor('#1e3a8a').font('Helvetica')
-           .text('1. The above-listed spares are classified as MANDATORY / RECOMMENDED and are required to be PROCURED and MAINTAINED at the site before the next scheduled maintenance visit.', doc.page.margins.left + 8, y + 18, { width: pageWidth - 16 })
-           .text('2. In case mandatory spares are not available or partially available at the site, the maintenance visit may be restricted to inspection only. It shall be counted as a PM visit under the AMC.', doc.page.margins.left + 8, y + 38, { width: pageWidth - 16 })
-           .text('3. Any limitation, delay or reduced scope of maintenance arising due to non-procurement of mandatory spares shall not be attributable to the service provider.', doc.page.margins.left + 8, y + 58, { width: pageWidth - 16 });
-        y += 90;
+        doc.fontSize(9).fillColor(BLACK).font('Helvetica')
+           .text('Remarks :', L, y);
+        y += 16;
 
-        // Client obligations
-        if (y > 680) { doc.addPage(); y = 50; }
-        doc.fontSize(9).fillColor(COLOR_BLACK).font('Helvetica-Bold')
-           .text('Client Obligations', doc.page.margins.left, y);
-        y += 12;
-        doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica')
-           .text('The client shall ensure the timely procurement and availability of all mandatory spares as recommended in this report to ensure uninterrupted operation and effective AMC service.', doc.page.margins.left, y, { width: pageWidth });
-        y += 30;
-        doc.fontSize(8).fillColor(COLOR_GRAY)
-           .text('We acknowledge the above mandatory spares requirement and understand the AMC compliance conditions.', doc.page.margins.left, y, { width: pageWidth });
-        y += 24;
+        const remarksText = report.remarks || '';
+        // Split into lines; show text on first line, then blank writing lines
+        const remarksLines = remarksText ? remarksText.split('\n') : [];
+        // Always draw 8 lines total
+        for (let i = 0; i < 8; i++) {
+          if (y + 14 > 780) { doc.addPage(); y = drawPageHeader(); }
+          hline(L, y + 12, L + PW);
+          if (remarksLines[i]) {
+            doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+               .text(remarksLines[i], L + 2, y + 2, { width: PW - 4 });
+          }
+          y += 16;
+        }
       }
 
-      // ── Signature Block ──────────────────────────────────────
-      if (y > 680) { doc.addPage(); y = 50; }
+
+      // ────────────────────────────────────────────────────────
+      // PAGE 3: MANDATORY SPARES + COMPLIANCE + SIGNATURES
+      // ────────────────────────────────────────────────────────
+      const spareItems = report.mandatory_spares || [];
+
+      // Always show spares page
+      doc.addPage();
+      y = drawPageHeader();
+
+      doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+         .text('Mandatory Spares - AMC Compliance Matrix', L, y, { width: PW, align: 'center' });
+      y += 16;
+
+      // Spares table columns
+      const SC = {
+        name:  Math.round(PW * 0.55),
+        model: Math.round(PW * 0.25),
+      };
+      SC.qty = PW - SC.name - SC.model;
+
+      const SX = {
+        name:  L,
+        model: L + SC.name,
+        qty:   L + SC.name + SC.model,
+      };
+
+      // Header
+      border(L, y, PW, ROW_H);
+      vline(SX.model, y, y + ROW_H);
+      vline(SX.qty,   y, y + ROW_H);
+      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
+         .text('Spare Name',             SX.name  + 5, y + 6, { width: SC.name - 10 })
+         .text('Pump Model',             SX.model + 5, y + 6, { width: SC.model - 10 })
+         .text('Total To Order (Total)', SX.qty   + 5, y + 6, { width: SC.qty - 10 });
+      y += ROW_H;
+
+      // Always render all 7 default spares; fill in data if it exists
+      const DEFAULT_SPARE_NAMES = [
+        'Complete set of Gaskets',
+        'Complete set of Valve Gasket',
+        'Complete set of Valve Spring',
+        'Complete set of Valve Screw',
+        'Complete set of Oil Connectors',
+        'Ferrule / Insert / Reducer set',
+        'Nylon Tubing Set',
+      ];
+
+      // Build lookup
+      const spareMap = {};
+      spareItems.forEach(s => { if (s.spare_name) spareMap[s.spare_name] = s; });
+
+      // Merge: start with default names, append any extra spares added by user
+      const allSpares = [
+        ...DEFAULT_SPARE_NAMES.map(name => spareMap[name] || { spare_name: name, pump_model: '', total_to_order: '' }),
+        ...spareItems.filter(s => !DEFAULT_SPARE_NAMES.includes(s.spare_name)),
+      ];
+
+      // Always show at least 12 rows (fill extras with empty rows)
+      const MIN_SPARE_ROWS = 12;
+      while (allSpares.length < MIN_SPARE_ROWS) allSpares.push({ spare_name: '', pump_model: '', total_to_order: '' });
+
+      allSpares.forEach(s => {
+        if (y + ROW_H > 780) { doc.addPage(); y = drawPageHeader(); }
+        border(L, y, PW, ROW_H);
+        vline(SX.model, y, y + ROW_H);
+        vline(SX.qty,   y, y + ROW_H);
+        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+           .text(s.spare_name || '',    SX.name  + 5, y + 6, { width: SC.name - 10 })
+           .text(s.pump_model || '',    SX.model + 5, y + 6, { width: SC.model - 10 })
+           .text(s.total_to_order || '', SX.qty  + 5, y + 6, { width: SC.qty - 10 });
+        y += ROW_H;
+      });
+
+      y += 16;
+
+      // ── Commercial & Compliance Notes ────────────────────────
+      if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
+
+      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold').font('Helvetica-BoldOblique')
+         .text('Commercial & Compliance Notes (AMC Aligned)', L, y);
+      y += 14;
+
+      const complianceNotes = [
+        'The above-listed spares are classified as MANDATORY / RECOMMENDED and are required to be PROCURED and MAINTAINED at the site before the next scheduled maintenance visit.',
+        'In case mandatory spares are not available or partially available at the site, the maintenance visit may be restricted to inspection only. It shall be counted as a PM visit under the AMC.',
+        'Any limitation, delay or reduced scope of maintenance arising due to non-procurement of mandatory spares shall not be attributable to the service provider.',
+      ];
+
+      doc.font('Helvetica');
+      complianceNotes.forEach((note, i) => {
+        if (y + 20 > 780) { doc.addPage(); y = drawPageHeader(); }
+        const noteH = doc.heightOfString(`${i + 1}.  ${note}`, { width: PW - 20, fontSize: 8.5 });
+        doc.fontSize(8.5).fillColor(BLACK)
+           .text(`${i + 1}.  ${note}`, L + 10, y, { width: PW - 20 });
+        y += noteH + 6;
+      });
+
       y += 10;
-      hRule(y); y += 16;
 
-      const halfW = (pageWidth - 20) / 2;
-      // Left box: VDT
-      doc.rect(doc.page.margins.left, y, halfW, 72).strokeColor(COLOR_BORDER).lineWidth(0.5).stroke();
-      doc.fontSize(8).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-         .text('Vacuum Drying Technology Representative', doc.page.margins.left + 8, y + 8, { width: halfW - 16 });
-      doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica')
-         .text('Name:', doc.page.margins.left + 8, y + 24)
-         .text(report.vdt_representative_name || '', doc.page.margins.left + 45, y + 24, { width: halfW - 53 })
-         .text('Sign:', doc.page.margins.left + 8, y + 40)
-         .text('Date:', doc.page.margins.left + 8, y + 56)
-         .text(formatDate(report.report_date), doc.page.margins.left + 45, y + 56, { width: halfW - 53 });
+      // ── Client Obligations ───────────────────────────────────
+      if (y + 50 > 780) { doc.addPage(); y = drawPageHeader(); }
 
-      // Right box: Client
-      const rx = doc.page.margins.left + halfW + 20;
-      doc.rect(rx, y, halfW, 72).strokeColor(COLOR_BORDER).lineWidth(0.5).stroke();
-      doc.fontSize(8).fillColor(COLOR_BLUE).font('Helvetica-Bold')
-         .text('Client Representative', rx + 8, y + 8, { width: halfW - 16 });
-      doc.fontSize(8).fillColor(COLOR_GRAY).font('Helvetica')
-         .text('Name:', rx + 8, y + 24)
-         .text(report.client_representative_name || '', rx + 45, y + 24, { width: halfW - 53 })
-         .text('Sign:', rx + 8, y + 40)
-         .text('Date:', rx + 8, y + 56)
-         .text(formatDate(report.report_date), rx + 45, y + 56, { width: halfW - 53 });
+      doc.fontSize(9).fillColor(BLACK).font('Helvetica-BoldOblique')
+         .text('Client Obligations', L, y);
+      y += 13;
+      doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+         .text('The client shall ensure the timely procurement and availability of all mandatory spares as recommended in this report to ensure uninterrupted operation and effective AMC service.', L + 10, y, { width: PW - 20 });
+      y += doc.heightOfString('The client shall ensure...', { width: PW - 20, fontSize: 8.5 }) + 8;
+
+      doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+         .text('We acknowledge the above mandatory spares requirement and understand the AMC compliance conditions.', L + 10, y, { width: PW - 20 });
+      y += 20;
+
+      // ── Signature table ──────────────────────────────────────
+      if (y + 80 > 780) { doc.addPage(); y = drawPageHeader(); }
+      y += 6;
+
+      const sigH   = 72;
+      const halfSW = Math.floor(PW / 2);
+
+      border(L, y, PW, sigH);
+      vline(L + halfSW, y, y + sigH);
+
+      // Header cells
+      hline(L, y + 18, L + PW);
+      doc.fontSize(8.5).fillColor(BLACK).font('Helvetica-Bold')
+         .text('Vacuum Drying Technology Representative', L + 5,            y + 4, { width: halfSW - 10 })
+         .text('Client Representative',                  L + halfSW + 5,   y + 4, { width: halfSW - 10 });
+
+      // Name / Sign / Date rows
+      const sig_labels = ['Name :', 'Sign :', 'Date :'];
+      const sig_vdt    = [
+        report.vdt_representative_name    || '',
+        '',
+        formatDate(report.report_date),
+      ];
+      const sig_client = [
+        report.client_representative_name || '',
+        '',
+        formatDate(report.report_date),
+      ];
+
+      let sy = y + 21;
+      sig_labels.forEach((label, i) => {
+        hline(L, sy, L + PW);
+        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+           .text(`${label}  ${sig_vdt[i]}`,    L + 5,           sy + 3, { width: halfSW - 10 })
+           .text(`${label}  ${sig_client[i]}`,  L + halfSW + 5, sy + 3, { width: halfSW - 10 });
+        sy += 17;
+      });
+
+      y += sigH + 6;
 
       doc.end();
+
     } catch (err) {
       reject(err);
     }
@@ -597,13 +664,13 @@ const getReports = async (req, res) => {
     const conditions = [];
     const values     = [];
 
-    if (status)        { values.push(status);                conditions.push(`r.status = $${values.length}`); }
+    if (status)        { values.push(status);                 conditions.push(`r.status = $${values.length}`); }
     if (technician_id) { values.push(parseInt(technician_id)); conditions.push(`r.technician_id = $${values.length}`); }
-    if (job_id)        { values.push(job_id);                conditions.push(`r.job_id = $${values.length}`); }
-    if (client_id)     { values.push(parseInt(client_id));   conditions.push(`r.client_id = $${values.length}`); }
-    if (po_number)     { values.push(po_number);             conditions.push(`r.po_number = $${values.length}`); }
-    if (from_date)     { values.push(from_date);             conditions.push(`r.report_date >= $${values.length}`); }
-    if (to_date)       { values.push(to_date);               conditions.push(`r.report_date <= $${values.length}`); }
+    if (job_id)        { values.push(job_id);                 conditions.push(`r.job_id = $${values.length}`); }
+    if (client_id)     { values.push(parseInt(client_id));    conditions.push(`r.client_id = $${values.length}`); }
+    if (po_number)     { values.push(po_number);              conditions.push(`r.po_number = $${values.length}`); }
+    if (from_date)     { values.push(from_date);              conditions.push(`r.report_date >= $${values.length}`); }
+    if (to_date)       { values.push(to_date);                conditions.push(`r.report_date <= $${values.length}`); }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -612,21 +679,15 @@ const getReports = async (req, res) => {
 
     values.push(limit, offset);
     const result = await pool.query(
-      `SELECT
-         r.id, r.job_id,
-         j.title AS job_title,
+      `SELECT r.id, r.job_id, j.title AS job_title,
          COALESCE(r.client_name, c.name) AS client_name,
-         r.client_email, r.client_id,
-         r.company_name, r.contact_person,
+         r.client_email, r.client_id, r.company_name, r.contact_person,
          r.model_serial_installation, r.operating_hours_per_day,
-         r.application_process_description,
-         r.po_number, r.location, r.serial_no, r.remarks,
-         r.title, r.findings, r.recommendations, r.comments,
-         r.vdt_representative_name, r.client_representative_name,
-         r.status,
-         r.technician_id, t.name AS technician_name,
-         r.approved_by_user_id, r.approved_at,
-         r.report_date,
+         r.application_process_description, r.po_number, r.location,
+         r.serial_no, r.remarks, r.title, r.findings, r.recommendations,
+         r.comments, r.vdt_representative_name, r.client_representative_name,
+         r.status, r.technician_id, t.name AS technician_name,
+         r.approved_by_user_id, r.approved_at, r.report_date,
          (SELECT COUNT(*) FROM report_images    ri WHERE ri.report_id = r.id) AS image_count,
          (SELECT COUNT(*) FROM technical_reports tr WHERE tr.report_id = r.id) AS technical_report_count,
          r.created_at, r.updated_at
@@ -676,28 +737,25 @@ const createReport = async (req, res) => {
     if (!technician_id) missing.push('technician_id');
     if (missing.length > 0) {
       return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
-        `Please fill in all required fields: ${missing.join(', ')}.`,
-        { missing_fields: missing });
+        `Please fill in all required fields: ${missing.join(', ')}.`, { missing_fields: missing });
     }
 
-    if (!Array.isArray(technical_reports)) return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'technical_reports must be an array.', { field: 'technical_reports' });
-    if (!Array.isArray(checklist_items))   return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'checklist_items must be an array.',   { field: 'checklist_items' });
+    if (!Array.isArray(technical_reports))  return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'technical_reports must be an array.', { field: 'technical_reports' });
+    if (!Array.isArray(checklist_items))    return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'checklist_items must be an array.', { field: 'checklist_items' });
     if (!Array.isArray(issue_observations)) return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'issue_observations must be an array.', { field: 'issue_observations' });
-    if (!Array.isArray(mandatory_spares))  return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'mandatory_spares must be an array.',  { field: 'mandatory_spares' });
+    if (!Array.isArray(mandatory_spares))   return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'mandatory_spares must be an array.', { field: 'mandatory_spares' });
 
     for (let i = 0; i < technical_reports.length; i++) {
       const doc = technical_reports[i];
       if (!doc.file_name || !doc.file_url) {
         return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
-          `technical_reports[${i}] must have both file_name and file_url.`,
-          { field: `technical_reports[${i}]` });
+          `technical_reports[${i}] must have both file_name and file_url.`, { field: `technical_reports[${i}]` });
       }
     }
 
     const jobCheck = await dbClient.query(
       `SELECT j.id, j.client_id, c.name AS client_name, c.email AS client_email
-       FROM jobs j LEFT JOIN clients c ON c.id = j.client_id WHERE j.id = $1`,
-      [job_id]
+       FROM jobs j LEFT JOIN clients c ON c.id = j.client_id WHERE j.id = $1`, [job_id]
     );
     if (jobCheck.rows.length === 0) return Errors.jobNotFound(res);
     const jobRow = jobCheck.rows[0];
@@ -828,8 +886,7 @@ const getReportById = async (req, res) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      `SELECT r.*, t.name AS technician_name,
-         j.title AS job_title,
+      `SELECT r.*, t.name AS technician_name, j.title AS job_title,
          COALESCE(r.client_name, c.name) AS client_name
        FROM reports r
        LEFT JOIN jobs        j ON j.id = r.job_id
@@ -849,11 +906,11 @@ const getReportById = async (req, res) => {
       pool.query(`SELECT spare_name, pump_model, total_to_order FROM report_mandatory_spares WHERE report_id = $1 ORDER BY id ASC`, [id]),
     ]);
 
-    report.images            = images.rows;
-    report.technical_reports = techReports.rows;
-    report.checklist_items   = checklist.rows;
+    report.images             = images.rows;
+    report.technical_reports  = techReports.rows;
+    report.checklist_items    = checklist.rows;
     report.issue_observations = issues.rows;
-    report.mandatory_spares  = spares.rows;
+    report.mandatory_spares   = spares.rows;
 
     return res.status(200).json({ success: true, data: report });
 
@@ -865,7 +922,7 @@ const getReportById = async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // GET /api/reports/:id/pdf
-// Uses pdfkit — no Puppeteer, no Chrome, works on Render/Railway/any server
+// Pure pdfkit — zero system dependencies, works on Render/Railway
 // ────────────────────────────────────────────────────────────
 const generateReportPdf = async (req, res) => {
   try {
@@ -918,15 +975,12 @@ const shareReport = async (req, res) => {
     const { id } = req.params;
     let { to, subject, message } = req.body;
 
-    if (!to) {
-      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'to (email address) is required.', { field: 'to' });
-    }
+    if (!to) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'to (email address) is required.', { field: 'to' });
+
     const recipients = Array.isArray(to) ? to : [to];
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     for (const addr of recipients) {
-      if (!emailRegex.test(addr)) {
-        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, `Invalid email address: "${addr}".`, { field: 'to' });
-      }
+      if (!emailRegex.test(addr)) return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, `Invalid email address: "${addr}".`, { field: 'to' });
     }
 
     const result = await pool.query(
