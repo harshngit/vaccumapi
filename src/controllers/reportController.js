@@ -19,6 +19,49 @@ const generateReportId = async (client) => {
   return `RPT-${String(lastNum + 1).padStart(4, '0')}`;
 };
 
+// ─── MASTER ISSUE DATA — full matrix from PDF Pages 2 & 3 ────
+// This is the complete static table shown in the PDF.
+// Selected rows (saved in DB) get a tick ✓.
+const MASTER_ISSUE_DATA = [
+  {
+    sr: 1, issue: 'Low Vaccum', rows: [
+      { observation: 'Valve damage (chock up)',  impact_on_pump: 'Overheat',                    severity: 'Med',  recommended_spares: 'Valve set'             },
+      { observation: 'Slide valve Damaged',       impact_on_pump: 'Abnormal Noise',              severity: 'High', recommended_spares: 'Slide valve or spring'  },
+      { observation: 'Piston ring Damaged',       impact_on_pump: 'Piston or cylinder damage',   severity: 'High', recommended_spares: 'Piston ring'            },
+      { observation: 'Oil seal Damaged',          impact_on_pump: 'Oil consumption Vacuum',      severity: 'Med',  recommended_spares: 'Sealing set'            },
+    ],
+  },
+  {
+    sr: 2, issue: 'Abnormal Sound', rows: [
+      { observation: 'Slide valve / Slide Valve spring Damaged', impact_on_pump: 'Overheat, Low Vacuum',                        severity: 'High', recommended_spares: 'Slide valve / Slide Valve spring'    },
+      { observation: 'Shell Bearing Damaged',                    impact_on_pump: 'Mechanical Damaged',                          severity: 'High', recommended_spares: 'Shell Bearing'                        },
+      { observation: 'Piston Pin / Bush Damaged',                impact_on_pump: 'Mechanical Damaged',                          severity: 'High', recommended_spares: 'Piston Pin / Bush'                    },
+      { observation: 'Flywheel / Distrubustion Rod Bearing Damaged', impact_on_pump: 'High Vibration',                          severity: 'High', recommended_spares: 'Flywheel / Distrubustion Rod Bearing' },
+      { observation: 'Distribution Control Pin Damaged',         impact_on_pump: 'Lubrication Pump Damage',                     severity: 'High', recommended_spares: 'Distribution Control Pin'             },
+      { observation: 'Pin For Outer Lever Damaged',              impact_on_pump: 'Tie Rod Head Damage',                         severity: 'High', recommended_spares: 'Pin For Outer Lever'                  },
+      { observation: 'Connecting Rod Damaged',                   impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Connecting Rod'                       },
+      { observation: 'Crankshaft Damaged',                       impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Crank Shaft'                          },
+      { observation: 'Inner Lever Damaged',                      impact_on_pump: 'Slide Valve Damage',                          severity: 'High', recommended_spares: 'Inner Lever'                          },
+      { observation: 'Cross Head Damaged',                       impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Cross Head'                           },
+    ],
+  },
+  {
+    sr: 3, issue: 'Excessive Oil', rows: [
+      { observation: 'Gland Packing Damaged',         impact_on_pump: 'Oil Leakage and Smoke',        severity: 'Med',  recommended_spares: 'Gland Packing'        },
+      { observation: 'Oil seal Damaged',              impact_on_pump: 'Oil Leakage',                  severity: 'High', recommended_spares: 'Oil seal'             },
+      { observation: 'Nylon Tubing Damaged',          impact_on_pump: 'Oil Leakage',                  severity: 'High', recommended_spares: 'Nylon Tubing'         },
+      { observation: 'Oil connector / Oiler Damaged', impact_on_pump: 'Oil Leakage',                  severity: 'High', recommended_spares: 'Oil connector / Oiler' },
+      { observation: 'Piston Rod Damaged',            impact_on_pump: 'Oil Consumption and Smoke',    severity: 'Med',  recommended_spares: 'Piston Rod'           },
+    ],
+  },
+  {
+    sr: 4, issue: 'No Lubrication', rows: [
+      { observation: 'Oil Filter Chocked / Damaged',    impact_on_pump: 'Overheat, Wear and Tare on Cylinder and Piston', severity: 'High', recommended_spares: 'Oil Filter Choked'      },
+      { observation: 'Lubrication Pump/ Lever Damaged', impact_on_pump: 'Overheat, Wear and Tare on Cylinder and Piston', severity: 'High', recommended_spares: 'Lubrication Pump / Lever' },
+    ],
+  },
+];
+
 // ─── Helper: build report email HTML ─────────────────────────
 const buildReportEmailHtml = (report, technicalFiles = []) => {
   const formatDate = (d) =>
@@ -119,8 +162,8 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// PDF GENERATION — exact replica of the original VDT form
-// Black & white, clean table layout, real checkboxes
+// PDF GENERATION — exact VDT form layout
+// Issue matrix: ALL rows shown, selected ones get ✓ tick
 // ────────────────────────────────────────────────────────────
 const generatePdfBuffer = (report) => {
   return new Promise((resolve, reject) => {
@@ -141,48 +184,40 @@ const generatePdfBuffer = (report) => {
       doc.on('end',  () => resolve(Buffer.concat(chunks)));
       doc.on('error', e => reject(e));
 
-      const L  = 45;           // left margin
-      const R  = 45;           // right margin
-      const PW = 595 - L - R;  // A4 width = 595 — usable width = 505
-      const BLACK = '#000000';
-      const GRAY  = '#555555';
+      const L   = 45;
+      const R   = 45;
+      const PW  = 595 - L - R;   // 505
+      const BLK = '#000000';
+      const GRAY = '#555555';
+      const ROW_H = 22;
 
       const formatDate = (d) =>
         d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
-      // ── Draw a border rect ──────────────────────────────────
+      // ── Helpers ──────────────────────────────────────────────
       const border = (x, y, w, h) =>
-        doc.rect(x, y, w, h).strokeColor(BLACK).lineWidth(0.5).stroke();
+        doc.rect(x, y, w, h).strokeColor(BLK).lineWidth(0.5).stroke();
 
-      // ── Draw horizontal line ────────────────────────────────
       const hline = (x1, y, x2, lw = 0.5) =>
-        doc.moveTo(x1, y).lineTo(x2, y).strokeColor(BLACK).lineWidth(lw).stroke();
+        doc.moveTo(x1, y).lineTo(x2, y).strokeColor(BLK).lineWidth(lw).stroke();
 
-      // ── Draw vertical line ──────────────────────────────────
       const vline = (x, y1, y2, lw = 0.5) =>
-        doc.moveTo(x, y1).lineTo(x, y2).strokeColor(BLACK).lineWidth(lw).stroke();
+        doc.moveTo(x, y1).lineTo(x, y2).strokeColor(BLK).lineWidth(lw).stroke();
 
-      // ── Draw a checkbox (empty square, or filled black square)
+      // Real checkbox — empty square, or filled solid black square
       const checkbox = (x, y, filled) => {
         const S = 7;
-        doc.rect(x, y, S, S).strokeColor(BLACK).lineWidth(0.6).stroke();
-        if (filled) {
-          doc.rect(x + 1, y + 1, S - 2, S - 2).fillColor(BLACK).fill();
-        }
+        doc.rect(x, y, S, S).strokeColor(BLK).lineWidth(0.6).stroke();
+        if (filled) doc.rect(x + 1, y + 1, S - 2, S - 2).fillColor(BLK).fill();
       };
 
-      // ── Draw a tick mark ✓ ──────────────────────────────────
-      const tick = (x, y) => {
-        doc.fontSize(10).fillColor(BLACK).font('Helvetica-Bold').text('✓', x, y);
-      };
-
-      // ── Page header: large bold title + address ─────────────
+      // ── Page header ──────────────────────────────────────────
       const drawPageHeader = () => {
         let y = 40;
-        doc.fontSize(22).fillColor(BLACK).font('Helvetica-Bold')
+        doc.fontSize(22).fillColor(BLK).font('Helvetica-Bold')
            .text('Vacuum Drying Technology India LLP', L, y, { width: PW, align: 'center' });
         y += 28;
-        doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+        doc.fontSize(8).fillColor(BLK).font('Helvetica')
            .text('101, Om Dronagiri, Girivihar Nagar, Shantivan, opp. Western Express Highway, Borivali (East), Mumbai - 400 066.', L, y, { width: PW, align: 'center' });
         y += 11;
         doc.fontSize(8).text('Contact No. : 9833594555 / 9819982801', L, y, { width: PW, align: 'center' });
@@ -193,74 +228,111 @@ const generatePdfBuffer = (report) => {
         return y + 10;
       };
 
+      // ── Column widths for issue matrix ───────────────────────
+      // Tick col | SR | Issue | Observation | Impact | Severity | Spares
+      const TICK_W = 16;
+      const IC = {
+        sr:     24,
+        issue:  68,
+        obs:    122,
+        impact: 100,
+        sev:    38,
+      };
+      IC.spares = PW - TICK_W - IC.sr - IC.issue - IC.obs - IC.impact - IC.sev;
+
+      const IX = {
+        tick:   L,
+        sr:     L + TICK_W,
+        issue:  L + TICK_W + IC.sr,
+        obs:    L + TICK_W + IC.sr + IC.issue,
+        impact: L + TICK_W + IC.sr + IC.issue + IC.obs,
+        sev:    L + TICK_W + IC.sr + IC.issue + IC.obs + IC.impact,
+        spares: L + TICK_W + IC.sr + IC.issue + IC.obs + IC.impact + IC.sev,
+      };
+
+      // ── Draw issue matrix header row ─────────────────────────
+      const drawIssueHeader = (y) => {
+        const H = 20;
+        border(L, y, PW, H);
+        // Vertical dividers (no divider for tick column — it's borderless)
+        vline(IX.sr,     y, y + H);
+        vline(IX.issue,  y, y + H);
+        vline(IX.obs,    y, y + H);
+        vline(IX.impact, y, y + H);
+        vline(IX.sev,    y, y + H);
+        vline(IX.spares, y, y + H);
+
+        doc.fontSize(8.5).fillColor(BLK).font('Helvetica-Bold')
+           .text('SR',                  IX.sr     + 3, y + 5, { width: IC.sr - 6 })
+           .text('Issue',               IX.issue  + 3, y + 5, { width: IC.issue - 6 })
+           .text('Observation',         IX.obs    + 3, y + 5, { width: IC.obs - 6 })
+           .text('Impact on Pump',      IX.impact + 3, y + 5, { width: IC.impact - 6 })
+           .text('Severity',            IX.sev    + 3, y + 5, { width: IC.sev - 6 })
+           .text('Recommended Spares',  IX.spares + 3, y + 5, { width: IC.spares - 6 });
+        return y + H;
+      };
+
       // ────────────────────────────────────────────────────────
-      // PAGE 1
+      // PAGE 1: Header + Client Info + Checklist
       // ────────────────────────────────────────────────────────
       let y = drawPageHeader();
 
-      // ── AMC Service Report title ─────────────────────────────
-      doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+      // Section title
+      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
          .text('AMC Service Report - Italvacuum Pump', L, y, { width: PW, align: 'center' });
       y += 18;
 
-      // ── Client info table ────────────────────────────────────
-      // Columns: Field 45% | Details 55%
+      // Client info table columns
       const COL1 = Math.round(PW * 0.42);
       const COL2 = PW - COL1;
-      const ROW_H = 22;
 
       const clientRows = [
-        ['Company Name',                   report.company_name || report.client_name || ''],
-        ['Location / Site',                report.location || ''],
-        ['Contact Person',                 report.contact_person || ''],
-        ['Madel - Serial No. - Installation Year', report.model_serial_installation || ''],
-        ['Operating Hours / Day',          report.operating_hours_per_day || ''],
-        ['Application / Process Description', report.application_process_description || ''],
+        ['Company Name',                            report.company_name || report.client_name || ''],
+        ['Location / Site',                         report.location || ''],
+        ['Contact Person',                          report.contact_person || ''],
+        ['Madel - Serial No. - Installation Year',  report.model_serial_installation || ''],
+        ['Operating Hours / Day',                   report.operating_hours_per_day || ''],
+        ['Application / Process Description',       report.application_process_description || ''],
       ];
 
-      // Header row
+      // Header
       border(L, y, PW, ROW_H);
       vline(L + COL1, y, y + ROW_H);
-      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
-         .text('Field',   L + 5,         y + 6, { width: COL1 - 10 })
-         .text('Details', L + COL1 + 5,  y + 6, { width: COL2 - 10 });
+      doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
+         .text('Field',   L + 5,        y + 6, { width: COL1 - 10 })
+         .text('Details', L + COL1 + 5, y + 6, { width: COL2 - 10 });
       y += ROW_H;
 
       clientRows.forEach(([label, val]) => {
-        const cellH = ROW_H;
-        border(L, y, PW, cellH);
-        vline(L + COL1, y, y + cellH);
-        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+        border(L, y, PW, ROW_H);
+        vline(L + COL1, y, y + ROW_H);
+        doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
            .text(label, L + 5, y + 6, { width: COL1 - 10 })
            .text(val,   L + COL1 + 5, y + 6, { width: COL2 - 10 });
-        y += cellH;
+        y += ROW_H;
       });
 
       y += 16;
 
-      // ── Checklist section ────────────────────────────────────
-      doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+      // ── Checklist ────────────────────────────────────────────
+      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
          .text('Checklist (Routine Preventive Maintenance)', L, y, { width: PW, align: 'center' });
       y += 14;
 
-      // All 9 checklist items from PDF with their options
       const ALL_CHECKLIST = [
-        { sr: 1, description: 'Check the oil level in the oil reserves.',                        options: ['OK', 'Topped Up'] },
-        { sr: 2, description: 'Check the oil level on the Root Compressors (If available).',     options: ['OK', 'Topped Up', 'NA'] },
-        { sr: 3, description: 'Check the lubrication circuit.',                                  options: ['Normal', 'Leakage', 'Blockage'] },
-        { sr: 4, description: 'Check the discharge valves.',                                     options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
-        { sr: 5, description: 'Check & adjust the Gland packing.',                              options: ['OK', 'Adjusted / Replaced', 'Spare Required'] },
-        { sr: 6, description: 'Oil filter cleaning.',                                           options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
-        { sr: 7, description: 'Greasing of the pump.',                                          options: ['OK', 'Done'] },
-        { sr: 8, description: 'Check the oil seal Ring.',                                       options: ['OK', 'Replaced', 'Spare Required'] },
-        { sr: 9, description: 'Check & adjustment of the driving belts.',                       options: ['OK', 'Replaced', 'Spare Required'] },
+        { sr: 1, description: 'Check the oil level in the oil reserves.',                       options: ['OK', 'Topped Up'] },
+        { sr: 2, description: 'Check the oil level on the Root Compressors (If available).',    options: ['OK', 'Topped Up', 'NA'] },
+        { sr: 3, description: 'Check the lubrication circuit.',                                 options: ['Normal', 'Leakage', 'Blockage'] },
+        { sr: 4, description: 'Check the discharge valves.',                                    options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
+        { sr: 5, description: 'Check & adjust the Gland packing.',                             options: ['OK', 'Adjusted / Replaced', 'Spare Required'] },
+        { sr: 6, description: 'Oil filter cleaning.',                                          options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
+        { sr: 7, description: 'Greasing of the pump.',                                         options: ['OK', 'Done'] },
+        { sr: 8, description: 'Check the oil seal Ring.',                                      options: ['OK', 'Replaced', 'Spare Required'] },
+        { sr: 9, description: 'Check & adjustment of the driving belts.',                      options: ['OK', 'Replaced', 'Spare Required'] },
       ];
 
-      // Build lookup from sr → selected status
       const checklistMap = {};
-      (report.checklist_items || []).forEach(item => {
-        checklistMap[item.sr] = item.status || '';
-      });
+      (report.checklist_items || []).forEach(item => { checklistMap[item.sr] = item.status || ''; });
 
       // Table header
       const SR_W   = 28;
@@ -270,78 +342,64 @@ const generatePdfBuffer = (report) => {
       border(L, y, PW, ROW_H);
       vline(L + SR_W,          y, y + ROW_H);
       vline(L + SR_W + DESC_W, y, y + ROW_H);
-      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
-         .text('SR',          L + 8,                    y + 6, { width: SR_W - 10 })
-         .text('Description', L + SR_W + 5,             y + 6, { width: DESC_W - 10 })
-         .text('Status',      L + SR_W + DESC_W + 5,    y + 6, { width: STAT_W - 10 });
+      doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
+         .text('SR',          L + 8,                 y + 6, { width: SR_W - 10 })
+         .text('Description', L + SR_W + 5,          y + 6, { width: DESC_W - 10 })
+         .text('Status',      L + SR_W + DESC_W + 5, y + 6, { width: STAT_W - 10 });
       y += ROW_H;
 
       ALL_CHECKLIST.forEach(item => {
         const selectedStatus = checklistMap[item.sr] || '';
+        const needsTwoLines  = [4, 5, 6].includes(item.sr);
+        const cellH          = needsTwoLines ? 36 : ROW_H;
 
-        // Rows 4, 5, 6 need extra height for two-line status options
-        const needsTwoLines = [4, 5, 6].includes(item.sr);
-        const cellH = needsTwoLines ? 36 : ROW_H;
-
-        if (y + cellH > 780) {
-          doc.addPage();
-          y = drawPageHeader();
-        }
+        if (y + cellH > 780) { doc.addPage(); y = drawPageHeader(); }
 
         border(L, y, PW, cellH);
         vline(L + SR_W,          y, y + cellH);
         vline(L + SR_W + DESC_W, y, y + cellH);
 
-        // SR number
-        doc.fontSize(9).fillColor(BLACK).font('Helvetica')
+        doc.fontSize(9).fillColor(BLK).font('Helvetica')
            .text(String(item.sr), L + 8, y + (cellH / 2) - 5, { width: SR_W - 10 });
-
-        // Description
-        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
+        doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
            .text(item.description, L + SR_W + 5, y + (cellH / 2) - 5, { width: DESC_W - 10 });
 
-        // Status checkboxes — row 4,5,6 have two lines
         const statusX = L + SR_W + DESC_W + 6;
+
         if (!needsTwoLines) {
-          // Single row: all options on one line
           let cx = statusX;
-          item.options.forEach((opt) => {
-            const filled = selectedStatus === opt;
-            checkbox(cx, y + 7, filled);
-            doc.fontSize(8).fillColor(BLACK).font('Helvetica')
-               .text(opt, cx + 10, y + 7, { width: STAT_W - (cx - statusX) - 15, lineBreak: false });
-            // Estimate text width for spacing
+          item.options.forEach(opt => {
+            checkbox(cx, y + 7, selectedStatus === opt);
+            doc.fontSize(8).fillColor(BLK).font('Helvetica')
+               .text(opt, cx + 10, y + 7, { lineBreak: false });
             cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
           });
         } else {
-          // Two lines: row 1 has first two options, row 2 has "Spare Required"
-          const topOpts   = item.options.slice(0, 2); // OK + Cleaned/Adjusted
-          const btmOpts   = item.options.slice(2);    // Spare Required
+          // Two-line layout for rows 4, 5, 6
+          const topOpts = item.options.slice(0, 2);
+          const btmOpts = item.options.slice(2);
           let cx = statusX;
-          topOpts.forEach((opt) => {
-            const filled = selectedStatus === opt;
-            checkbox(cx, y + 5, filled);
-            doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+          topOpts.forEach(opt => {
+            checkbox(cx, y + 5, selectedStatus === opt);
+            doc.fontSize(8).fillColor(BLK).font('Helvetica')
                .text(opt, cx + 10, y + 5, { lineBreak: false });
             cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
           });
           cx = statusX;
-          btmOpts.forEach((opt) => {
-            const filled = selectedStatus === opt;
-            checkbox(cx, y + 21, filled);
-            doc.fontSize(8).fillColor(BLACK).font('Helvetica')
+          btmOpts.forEach(opt => {
+            checkbox(cx, y + 21, selectedStatus === opt);
+            doc.fontSize(8).fillColor(BLK).font('Helvetica')
                .text(opt, cx + 10, y + 21, { lineBreak: false });
             cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
           });
         }
-
         y += cellH;
       });
 
       y += 14;
 
       // ── Site & Environmental Conditions ─────────────────────
-      if (y + 90 > 780) { doc.addPage(); y = drawPageHeader(); }
+      if (y + 95 > 780) { doc.addPage(); y = drawPageHeader(); }
 
       const envLines = [
         'Maintain the pump installation area in a clean, dry and workable environment.',
@@ -349,179 +407,141 @@ const generatePdfBuffer = (report) => {
         'Prevent the accumulation of dust, chemicals, solvents, vapours or waste material near the pump.',
         'Maintain environmental cleanliness of the pump, motor and accessories at all times.',
       ];
-      const envBoxH = 14 + envLines.length * 14 + 6;
+      const envBoxH = 20 + envLines.length * 14;
       border(L, y, PW, envBoxH);
-
-      // Header row of env box
       hline(L, y + 18, L + PW);
-      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
+      doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
          .text('Site & Environmental Conditions', L + 5, y + 5, { width: PW - 10, align: 'center' });
-
       let ey = y + 22;
       envLines.forEach(line => {
-        doc.fontSize(8).fillColor(BLACK).font('Helvetica').text(line, L + 8, ey, { width: PW - 16 });
+        doc.fontSize(8).fillColor(BLK).font('Helvetica').text(line, L + 8, ey, { width: PW - 16 });
         ey += 14;
       });
       y += envBoxH + 6;
-
       doc.fontSize(7.5).fillColor(GRAY).font('Helvetica')
          .text('Note : Client is obliged to maintain the above points.', L, y);
-      y += 14;
-
 
       // ────────────────────────────────────────────────────────
-      // PAGE 2: ISSUE OBSERVATION MATRIX
+      // PAGE 2+: ISSUE OBSERVATION MATRIX
+      // Shows ALL rows from master data. Selected = ✓ tick beside row.
       // ────────────────────────────────────────────────────────
-      const issueItems = report.issue_observations || [];
 
-      if (issueItems.length > 0) {
-        doc.addPage();
-        y = drawPageHeader();
+      // Build a Set of selected observation keys: "issue||observation"
+      const selectedSet = new Set();
+      (report.issue_observations || []).forEach(obs => {
+        if (obs.issue && obs.observation) {
+          selectedSet.add(`${obs.issue}||${obs.observation}`);
+        }
+      });
 
-        doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
-           .text('Detailed Issue - Observation - Impact Matrix', L, y, { width: PW, align: 'center' });
-        y += 16;
+      doc.addPage();
+      y = drawPageHeader();
 
-        // Column widths
-        const IC = {
-          sr:     28,
-          issue:  70,
-          obs:    125,
-          impact: 105,
-          sev:    42,
-        };
-        IC.spares = PW - IC.sr - IC.issue - IC.obs - IC.impact - IC.sev;
+      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
+         .text('Detailed Issue - Observation - Impact Matrix', L, y, { width: PW, align: 'center' });
+      y += 16;
 
-        const IX = {
-          sr:     L,
-          issue:  L + IC.sr,
-          obs:    L + IC.sr + IC.issue,
-          impact: L + IC.sr + IC.issue + IC.obs,
-          sev:    L + IC.sr + IC.issue + IC.obs + IC.impact,
-          spares: L + IC.sr + IC.issue + IC.obs + IC.impact + IC.sev,
-        };
+      y = drawIssueHeader(y);
 
-        // Header row
-        const IHH = 20;
-        border(L, y, PW, IHH);
-        Object.values(IX).slice(1).forEach(x => vline(x, y, y + IHH));
+      MASTER_ISSUE_DATA.forEach(issueGroup => {
+        issueGroup.rows.forEach((row, rowIdx) => {
+          const isSelected = selectedSet.has(`${issueGroup.issue}||${row.observation}`);
 
-        doc.fontSize(8).fillColor(BLACK).font('Helvetica-Bold')
-           .text('SR',                  IX.sr     + 3, y + 5, { width: IC.sr - 6 })
-           .text('Issue',               IX.issue  + 3, y + 5, { width: IC.issue - 6 })
-           .text('Observation',         IX.obs    + 3, y + 5, { width: IC.obs - 6 })
-           .text('Impact on Pump',      IX.impact + 3, y + 5, { width: IC.impact - 6 })
-           .text('Severity',            IX.sev    + 3, y + 5, { width: IC.sev - 6 })
-           .text('Recommended Spares',  IX.spares + 3, y + 5, { width: IC.spares - 6 });
-        y += IHH;
-
-        issueItems.forEach((obs, i) => {
-          // Estimate row height based on text wrapping
-          const maxCellText = Math.max(
-            doc.heightOfString(obs.observation || '', { width: IC.obs - 6, fontSize: 8.5 }),
-            doc.heightOfString(obs.impact_on_pump || '', { width: IC.impact - 6, fontSize: 8.5 }),
-            doc.heightOfString(obs.recommended_spares || '', { width: IC.spares - 6, fontSize: 8.5 }),
-            18
-          );
-          const rowH = maxCellText + 10;
+          // Estimate row height
+          const obsH    = doc.heightOfString(row.observation || '', { width: IC.obs - 6, fontSize: 8.5 });
+          const impH    = doc.heightOfString(row.impact_on_pump || '', { width: IC.impact - 6, fontSize: 8.5 });
+          const sparesH = doc.heightOfString(row.recommended_spares || '', { width: IC.spares - 6, fontSize: 8.5 });
+          const rowH    = Math.max(obsH, impH, sparesH, 18) + 10;
 
           if (y + rowH > 780) {
             doc.addPage();
             y = drawPageHeader();
-            // mini col headers on continued page
-            border(L, y, PW, IHH);
-            Object.values(IX).slice(1).forEach(x => vline(x, y, y + IHH));
-            doc.fontSize(8).fillColor(BLACK).font('Helvetica-Bold')
-               .text('SR', IX.sr + 3, y + 5, { width: IC.sr - 6 })
-               .text('Issue', IX.issue + 3, y + 5, { width: IC.issue - 6 })
-               .text('Observation', IX.obs + 3, y + 5, { width: IC.obs - 6 })
-               .text('Impact on Pump', IX.impact + 3, y + 5, { width: IC.impact - 6 })
-               .text('Severity', IX.sev + 3, y + 5, { width: IC.sev - 6 })
-               .text('Recommended Spares', IX.spares + 3, y + 5, { width: IC.spares - 6 });
-            y += IHH;
+            y = drawIssueHeader(y);
           }
 
+          // Draw the full row border + internal vertical lines
           border(L, y, PW, rowH);
-          Object.values(IX).slice(1).forEach(x => vline(x, y, y + rowH));
+          vline(IX.sr,     y, y + rowH);
+          vline(IX.issue,  y, y + rowH);
+          vline(IX.obs,    y, y + rowH);
+          vline(IX.impact, y, y + rowH);
+          vline(IX.sev,    y, y + rowH);
+          vline(IX.spares, y, y + rowH);
 
-          doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
-             .text(String(obs.sr || i + 1),   IX.sr     + 3, y + 5, { width: IC.sr - 6 })
-             .text(obs.issue || '',            IX.issue  + 3, y + 5, { width: IC.issue - 6 })
-             .text(obs.observation || '',      IX.obs    + 3, y + 5, { width: IC.obs - 6 })
-             .text(obs.impact_on_pump || '',   IX.impact + 3, y + 5, { width: IC.impact - 6 })
-             .text(obs.severity || '',         IX.sev    + 3, y + 5, { width: IC.sev - 6 })
-             .text(obs.recommended_spares || '', IX.spares + 3, y + 5, { width: IC.spares - 6 });
+          const ty = y + 5; // text y
 
-          // Tick mark beside selected issue row
-          if (obs.issue || obs.observation) {
-            tick(IX.sr - 12, y + 5);
+          // ── Tick mark in leftmost column if selected ─────────
+          if (isSelected) {
+            doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
+               .text('✓', IX.tick + 2, ty, { width: TICK_W - 4 });
           }
+
+          // ── SR: only on the first row of each issue group ────
+          if (rowIdx === 0) {
+            doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+               .text(String(issueGroup.sr), IX.sr + 3, ty, { width: IC.sr - 6 });
+          }
+
+          // ── Issue: only on the first row of each group ───────
+          if (rowIdx === 0) {
+            doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+               .text(issueGroup.issue, IX.issue + 3, ty, { width: IC.issue - 6 });
+          }
+
+          // ── Observation, Impact, Severity, Spares ────────────
+          doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+             .text(row.observation        || '', IX.obs    + 3, ty, { width: IC.obs - 6 })
+             .text(row.impact_on_pump     || '', IX.impact + 3, ty, { width: IC.impact - 6 })
+             .text(row.severity           || '', IX.sev    + 3, ty, { width: IC.sev - 6 })
+             .text(row.recommended_spares || '', IX.spares + 3, ty, { width: IC.spares - 6 });
 
           y += rowH;
         });
+      });
 
-        y += 20;
+      // ── Remarks section — writing lines ──────────────────────
+      y += 20;
+      if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
 
-        // ── Remarks section — lines for writing ───────────────
-        if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
+      doc.fontSize(9).fillColor(BLK).font('Helvetica').text('Remarks :', L, y);
+      y += 16;
 
-        doc.fontSize(9).fillColor(BLACK).font('Helvetica')
-           .text('Remarks :', L, y);
-        y += 16;
-
-        const remarksText = report.remarks || '';
-        // Split into lines; show text on first line, then blank writing lines
-        const remarksLines = remarksText ? remarksText.split('\n') : [];
-        // Always draw 8 lines total
-        for (let i = 0; i < 8; i++) {
-          if (y + 14 > 780) { doc.addPage(); y = drawPageHeader(); }
-          hline(L, y + 12, L + PW);
-          if (remarksLines[i]) {
-            doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
-               .text(remarksLines[i], L + 2, y + 2, { width: PW - 4 });
-          }
-          y += 16;
+      const remarksLines = (report.remarks || '').split('\n');
+      for (let i = 0; i < 8; i++) {
+        if (y + 14 > 780) { doc.addPage(); y = drawPageHeader(); }
+        hline(L, y + 12, L + PW);
+        if (remarksLines[i]) {
+          doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+             .text(remarksLines[i], L + 2, y + 2, { width: PW - 4 });
         }
+        y += 16;
       }
-
 
       // ────────────────────────────────────────────────────────
       // PAGE 3: MANDATORY SPARES + COMPLIANCE + SIGNATURES
       // ────────────────────────────────────────────────────────
-      const spareItems = report.mandatory_spares || [];
-
-      // Always show spares page
       doc.addPage();
       y = drawPageHeader();
 
-      doc.fontSize(11).fillColor(BLACK).font('Helvetica-Bold')
+      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
          .text('Mandatory Spares - AMC Compliance Matrix', L, y, { width: PW, align: 'center' });
       y += 16;
 
       // Spares table columns
-      const SC = {
-        name:  Math.round(PW * 0.55),
-        model: Math.round(PW * 0.25),
-      };
+      const SC = { name: Math.round(PW * 0.55), model: Math.round(PW * 0.25) };
       SC.qty = PW - SC.name - SC.model;
-
-      const SX = {
-        name:  L,
-        model: L + SC.name,
-        qty:   L + SC.name + SC.model,
-      };
+      const SX = { name: L, model: L + SC.name, qty: L + SC.name + SC.model };
 
       // Header
       border(L, y, PW, ROW_H);
       vline(SX.model, y, y + ROW_H);
       vline(SX.qty,   y, y + ROW_H);
-      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold')
+      doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
          .text('Spare Name',             SX.name  + 5, y + 6, { width: SC.name - 10 })
          .text('Pump Model',             SX.model + 5, y + 6, { width: SC.model - 10 })
          .text('Total To Order (Total)', SX.qty   + 5, y + 6, { width: SC.qty - 10 });
       y += ROW_H;
 
-      // Always render all 7 default spares; fill in data if it exists
       const DEFAULT_SPARE_NAMES = [
         'Complete set of Gaskets',
         'Complete set of Valve Gasket',
@@ -532,111 +552,87 @@ const generatePdfBuffer = (report) => {
         'Nylon Tubing Set',
       ];
 
-      // Build lookup
       const spareMap = {};
-      spareItems.forEach(s => { if (s.spare_name) spareMap[s.spare_name] = s; });
+      (report.mandatory_spares || []).forEach(s => { if (s.spare_name) spareMap[s.spare_name] = s; });
 
-      // Merge: start with default names, append any extra spares added by user
       const allSpares = [
         ...DEFAULT_SPARE_NAMES.map(name => spareMap[name] || { spare_name: name, pump_model: '', total_to_order: '' }),
-        ...spareItems.filter(s => !DEFAULT_SPARE_NAMES.includes(s.spare_name)),
+        ...(report.mandatory_spares || []).filter(s => !DEFAULT_SPARE_NAMES.includes(s.spare_name)),
       ];
 
-      // Always show at least 12 rows (fill extras with empty rows)
-      const MIN_SPARE_ROWS = 12;
-      while (allSpares.length < MIN_SPARE_ROWS) allSpares.push({ spare_name: '', pump_model: '', total_to_order: '' });
+      const MIN_ROWS = 12;
+      while (allSpares.length < MIN_ROWS) allSpares.push({ spare_name: '', pump_model: '', total_to_order: '' });
 
       allSpares.forEach(s => {
         if (y + ROW_H > 780) { doc.addPage(); y = drawPageHeader(); }
         border(L, y, PW, ROW_H);
         vline(SX.model, y, y + ROW_H);
         vline(SX.qty,   y, y + ROW_H);
-        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
-           .text(s.spare_name || '',    SX.name  + 5, y + 6, { width: SC.name - 10 })
-           .text(s.pump_model || '',    SX.model + 5, y + 6, { width: SC.model - 10 })
-           .text(s.total_to_order || '', SX.qty  + 5, y + 6, { width: SC.qty - 10 });
+        doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+           .text(s.spare_name || '',     SX.name  + 5, y + 6, { width: SC.name - 10 })
+           .text(s.pump_model || '',     SX.model + 5, y + 6, { width: SC.model - 10 })
+           .text(s.total_to_order || '', SX.qty   + 5, y + 6, { width: SC.qty - 10 });
         y += ROW_H;
       });
 
       y += 16;
+      if (y + 80 > 780) { doc.addPage(); y = drawPageHeader(); }
 
-      // ── Commercial & Compliance Notes ────────────────────────
-      if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
-
-      doc.fontSize(9).fillColor(BLACK).font('Helvetica-Bold').font('Helvetica-BoldOblique')
+      // Compliance notes
+      doc.fontSize(9).fillColor(BLK).font('Helvetica-BoldOblique')
          .text('Commercial & Compliance Notes (AMC Aligned)', L, y);
       y += 14;
 
-      const complianceNotes = [
+      [
         'The above-listed spares are classified as MANDATORY / RECOMMENDED and are required to be PROCURED and MAINTAINED at the site before the next scheduled maintenance visit.',
         'In case mandatory spares are not available or partially available at the site, the maintenance visit may be restricted to inspection only. It shall be counted as a PM visit under the AMC.',
         'Any limitation, delay or reduced scope of maintenance arising due to non-procurement of mandatory spares shall not be attributable to the service provider.',
-      ];
-
-      doc.font('Helvetica');
-      complianceNotes.forEach((note, i) => {
+      ].forEach((note, i) => {
         if (y + 20 > 780) { doc.addPage(); y = drawPageHeader(); }
-        const noteH = doc.heightOfString(`${i + 1}.  ${note}`, { width: PW - 20, fontSize: 8.5 });
-        doc.fontSize(8.5).fillColor(BLACK)
+        const nh = doc.heightOfString(`${i + 1}.  ${note}`, { width: PW - 20, fontSize: 8.5 });
+        doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
            .text(`${i + 1}.  ${note}`, L + 10, y, { width: PW - 20 });
-        y += noteH + 6;
+        y += nh + 6;
       });
 
       y += 10;
-
-      // ── Client Obligations ───────────────────────────────────
       if (y + 50 > 780) { doc.addPage(); y = drawPageHeader(); }
 
-      doc.fontSize(9).fillColor(BLACK).font('Helvetica-BoldOblique')
-         .text('Client Obligations', L, y);
+      doc.fontSize(9).fillColor(BLK).font('Helvetica-BoldOblique').text('Client Obligations', L, y);
       y += 13;
-      doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
-         .text('The client shall ensure the timely procurement and availability of all mandatory spares as recommended in this report to ensure uninterrupted operation and effective AMC service.', L + 10, y, { width: PW - 20 });
-      y += doc.heightOfString('The client shall ensure...', { width: PW - 20, fontSize: 8.5 }) + 8;
+      const co1 = 'The client shall ensure the timely procurement and availability of all mandatory spares as recommended in this report to ensure uninterrupted operation and effective AMC service.';
+      const co2 = 'We acknowledge the above mandatory spares requirement and understand the AMC compliance conditions.';
+      doc.fontSize(8.5).fillColor(BLK).font('Helvetica').text(co1, L + 10, y, { width: PW - 20 });
+      y += doc.heightOfString(co1, { width: PW - 20, fontSize: 8.5 }) + 8;
+      doc.fontSize(8.5).fillColor(BLK).font('Helvetica').text(co2, L + 10, y, { width: PW - 20 });
+      y += 22;
 
-      doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
-         .text('We acknowledge the above mandatory spares requirement and understand the AMC compliance conditions.', L + 10, y, { width: PW - 20 });
-      y += 20;
-
-      // ── Signature table ──────────────────────────────────────
+      // Signature table
       if (y + 80 > 780) { doc.addPage(); y = drawPageHeader(); }
       y += 6;
 
-      const sigH   = 72;
-      const halfSW = Math.floor(PW / 2);
+      const sigH    = 72;
+      const halfSW  = Math.floor(PW / 2);
 
       border(L, y, PW, sigH);
       vline(L + halfSW, y, y + sigH);
-
-      // Header cells
       hline(L, y + 18, L + PW);
-      doc.fontSize(8.5).fillColor(BLACK).font('Helvetica-Bold')
-         .text('Vacuum Drying Technology Representative', L + 5,            y + 4, { width: halfSW - 10 })
-         .text('Client Representative',                  L + halfSW + 5,   y + 4, { width: halfSW - 10 });
 
-      // Name / Sign / Date rows
-      const sig_labels = ['Name :', 'Sign :', 'Date :'];
-      const sig_vdt    = [
-        report.vdt_representative_name    || '',
-        '',
-        formatDate(report.report_date),
-      ];
-      const sig_client = [
-        report.client_representative_name || '',
-        '',
-        formatDate(report.report_date),
-      ];
+      doc.fontSize(8.5).fillColor(BLK).font('Helvetica-Bold')
+         .text('Vacuum Drying Technology Representative', L + 5,           y + 4, { width: halfSW - 10 })
+         .text('Client Representative',                  L + halfSW + 5,  y + 4, { width: halfSW - 10 });
 
+      const sigLabels = ['Name :', 'Sign :', 'Date :'];
+      const sigVdt    = [report.vdt_representative_name || '', '', formatDate(report.report_date)];
+      const sigClient = [report.client_representative_name || '', '', formatDate(report.report_date)];
       let sy = y + 21;
-      sig_labels.forEach((label, i) => {
+      sigLabels.forEach((lbl, i) => {
         hline(L, sy, L + PW);
-        doc.fontSize(8.5).fillColor(BLACK).font('Helvetica')
-           .text(`${label}  ${sig_vdt[i]}`,    L + 5,           sy + 3, { width: halfSW - 10 })
-           .text(`${label}  ${sig_client[i]}`,  L + halfSW + 5, sy + 3, { width: halfSW - 10 });
+        doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+           .text(`${lbl}  ${sigVdt[i]}`,    L + 5,          sy + 3, { width: halfSW - 10 })
+           .text(`${lbl}  ${sigClient[i]}`,  L + halfSW + 5, sy + 3, { width: halfSW - 10 });
         sy += 17;
       });
-
-      y += sigH + 6;
 
       doc.end();
 
@@ -657,23 +653,20 @@ const getReports = async (req, res) => {
     const { status, technician_id, job_id, from_date, to_date, client_id, po_number } = req.query;
 
     if (status && !['Pending', 'Approved', 'Rejected'].includes(status)) {
-      return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS,
-        'Invalid status. Allowed: Pending, Approved, Rejected.', { field: 'status' });
+      return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS, 'Invalid status. Allowed: Pending, Approved, Rejected.', { field: 'status' });
     }
 
     const conditions = [];
     const values     = [];
-
-    if (status)        { values.push(status);                 conditions.push(`r.status = $${values.length}`); }
+    if (status)        { values.push(status);                conditions.push(`r.status = $${values.length}`); }
     if (technician_id) { values.push(parseInt(technician_id)); conditions.push(`r.technician_id = $${values.length}`); }
-    if (job_id)        { values.push(job_id);                 conditions.push(`r.job_id = $${values.length}`); }
-    if (client_id)     { values.push(parseInt(client_id));    conditions.push(`r.client_id = $${values.length}`); }
-    if (po_number)     { values.push(po_number);              conditions.push(`r.po_number = $${values.length}`); }
-    if (from_date)     { values.push(from_date);              conditions.push(`r.report_date >= $${values.length}`); }
-    if (to_date)       { values.push(to_date);                conditions.push(`r.report_date <= $${values.length}`); }
+    if (job_id)        { values.push(job_id);                conditions.push(`r.job_id = $${values.length}`); }
+    if (client_id)     { values.push(parseInt(client_id));   conditions.push(`r.client_id = $${values.length}`); }
+    if (po_number)     { values.push(po_number);             conditions.push(`r.po_number = $${values.length}`); }
+    if (from_date)     { values.push(from_date);             conditions.push(`r.report_date >= $${values.length}`); }
+    if (to_date)       { values.push(to_date);               conditions.push(`r.report_date <= $${values.length}`); }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
     const countResult = await pool.query(`SELECT COUNT(*) FROM reports r ${where}`, values);
     const total = parseInt(countResult.rows[0].count);
 
@@ -700,13 +693,7 @@ const getReports = async (req, res) => {
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values
     );
-
-    return res.status(200).json({
-      success: true,
-      data: result.rows,
-      pagination: { total, page, limit, total_pages: Math.ceil(total / limit) },
-    });
-
+    return res.status(200).json({ success: true, data: result.rows, pagination: { total, page, limit, total_pages: Math.ceil(total / limit) } });
   } catch (error) {
     console.error('Get reports error:', error);
     return Errors.internalError(res);
@@ -735,10 +722,7 @@ const createReport = async (req, res) => {
     if (!job_id)        missing.push('job_id');
     if (!title)         missing.push('title');
     if (!technician_id) missing.push('technician_id');
-    if (missing.length > 0) {
-      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
-        `Please fill in all required fields: ${missing.join(', ')}.`, { missing_fields: missing });
-    }
+    if (missing.length > 0) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, `Please fill in all required fields: ${missing.join(', ')}.`, { missing_fields: missing });
 
     if (!Array.isArray(technical_reports))  return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'technical_reports must be an array.', { field: 'technical_reports' });
     if (!Array.isArray(checklist_items))    return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'checklist_items must be an array.', { field: 'checklist_items' });
@@ -746,11 +730,8 @@ const createReport = async (req, res) => {
     if (!Array.isArray(mandatory_spares))   return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'mandatory_spares must be an array.', { field: 'mandatory_spares' });
 
     for (let i = 0; i < technical_reports.length; i++) {
-      const doc = technical_reports[i];
-      if (!doc.file_name || !doc.file_url) {
-        return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
-          `technical_reports[${i}] must have both file_name and file_url.`, { field: `technical_reports[${i}]` });
-      }
+      if (!technical_reports[i].file_name || !technical_reports[i].file_url)
+        return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, `technical_reports[${i}] must have both file_name and file_url.`, { field: `technical_reports[${i}]` });
     }
 
     const jobCheck = await dbClient.query(
@@ -765,10 +746,8 @@ const createReport = async (req, res) => {
 
     if (po_number) {
       const amcCheck = await dbClient.query('SELECT id FROM amc_contracts WHERE po_number = $1 LIMIT 1', [po_number]);
-      if (amcCheck.rows.length === 0) {
-        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
-          `PO Number "${po_number}" does not match any AMC contract.`, { field: 'po_number' });
-      }
+      if (amcCheck.rows.length === 0)
+        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, `PO Number "${po_number}" does not match any AMC contract.`, { field: 'po_number' });
     }
 
     const resolvedClientId    = client_id    || jobRow.client_id    || null;
@@ -785,10 +764,8 @@ const createReport = async (req, res) => {
          company_name, contact_person, model_serial_installation,
          operating_hours_per_day, application_process_description, remarks,
          vdt_representative_name, client_representative_name
-       ) VALUES (
-         $1,$2,$3,$4,$5,'Pending',$6,CURRENT_DATE,$7,$8,$9,$10,$11,$12,$13,
-         $14,$15,$16,$17,$18,$19,$20,$21
-       ) RETURNING *`,
+       ) VALUES ($1,$2,$3,$4,$5,'Pending',$6,CURRENT_DATE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       RETURNING *`,
       [
         reportId, job_id, title.trim(),
         findings || null, recommendations || null, technician_id,
@@ -801,35 +778,23 @@ const createReport = async (req, res) => {
     );
     const createdReport = result.rows[0];
 
-    for (const item of checklist_items) {
-      await dbClient.query(
-        `INSERT INTO report_checklist_items (report_id, sr, description, status) VALUES ($1, $2, $3, $4)`,
-        [reportId, item.sr, item.description, item.status || null]
-      );
-    }
+    for (const item of checklist_items)
+      await dbClient.query(`INSERT INTO report_checklist_items (report_id, sr, description, status) VALUES ($1,$2,$3,$4)`, [reportId, item.sr, item.description, item.status || null]);
 
-    for (const obs of issue_observations) {
+    for (const obs of issue_observations)
       await dbClient.query(
-        `INSERT INTO report_issue_observations (report_id, sr, issue, observation, impact_on_pump, severity, recommended_spares)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [reportId, obs.sr || null, obs.issue || null, obs.observation || null,
-         obs.impact_on_pump || null, obs.severity || null, obs.recommended_spares || null]
+        `INSERT INTO report_issue_observations (report_id, sr, issue, observation, impact_on_pump, severity, recommended_spares) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [reportId, obs.sr || null, obs.issue || null, obs.observation || null, obs.impact_on_pump || null, obs.severity || null, obs.recommended_spares || null]
       );
-    }
 
-    for (const spare of mandatory_spares) {
-      await dbClient.query(
-        `INSERT INTO report_mandatory_spares (report_id, spare_name, pump_model, total_to_order) VALUES ($1, $2, $3, $4)`,
-        [reportId, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]
-      );
-    }
+    for (const spare of mandatory_spares)
+      await dbClient.query(`INSERT INTO report_mandatory_spares (report_id, spare_name, pump_model, total_to_order) VALUES ($1,$2,$3,$4)`, [reportId, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]);
 
     const savedTechnicalReports = [];
     for (const doc of technical_reports) {
       const tr = await dbClient.query(
         `INSERT INTO technical_reports (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
         [reportId, doc.file_name, doc.file_url, doc.mime_type || 'application/pdf', doc.file_size_bytes || null, req.user.id]
       );
       savedTechnicalReports.push(tr.rows[0]);
@@ -846,22 +811,14 @@ const createReport = async (req, res) => {
     if (resolvedClientEmail) {
       const html = buildReportEmailHtml(createdReport, savedTechnicalReports);
       await sendNotification('report_submitted', {
-        to:      resolvedClientEmail,
+        to: resolvedClientEmail,
         subject: `AMC Service Report ${reportId} — ${title.trim()} | Vacuum Drying Technology India LLP`,
         html,
       });
     }
 
-    await notify({
-      event: 'report_submitted', title: 'New Report Submitted',
-      message: `${reportId} — ${title.trim()} (Job: ${job_id})`,
-      entity_type: 'report', entity_id: reportId, roles: ['admin', 'manager'],
-    }, wsManager);
-
-    await logActivity({
-      type: 'report', action: `Report ${reportId} submitted — ${title.trim()} (Job: ${job_id})`,
-      entity_type: 'report', entity_id: reportId, performed_by: req.user.id,
-    });
+    await notify({ event: 'report_submitted', title: 'New Report Submitted', message: `${reportId} — ${title.trim()} (Job: ${job_id})`, entity_type: 'report', entity_id: reportId, roles: ['admin', 'manager'] }, wsManager);
+    await logActivity({ type: 'report', action: `Report ${reportId} submitted — ${title.trim()} (Job: ${job_id})`, entity_type: 'report', entity_id: reportId, performed_by: req.user.id });
 
     return res.status(201).json({
       success: true,
@@ -884,20 +841,17 @@ const createReport = async (req, res) => {
 const getReportById = async (req, res) => {
   try {
     const { id } = req.params;
-
     const result = await pool.query(
       `SELECT r.*, t.name AS technician_name, j.title AS job_title,
          COALESCE(r.client_name, c.name) AS client_name
        FROM reports r
-       LEFT JOIN jobs        j ON j.id = r.job_id
-       LEFT JOIN clients     c ON c.id = COALESCE(r.client_id, j.client_id)
+       LEFT JOIN jobs j ON j.id = r.job_id
+       LEFT JOIN clients c ON c.id = COALESCE(r.client_id, j.client_id)
        LEFT JOIN technicians t ON t.id = r.technician_id
        WHERE r.id = $1`, [id]
     );
     if (result.rows.length === 0) return Errors.reportNotFound(res);
-
     const report = result.rows[0];
-
     const [images, techReports, checklist, issues, spares] = await Promise.all([
       pool.query(`SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at FROM report_images WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
       pool.query(`SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at FROM technical_reports WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
@@ -905,15 +859,12 @@ const getReportById = async (req, res) => {
       pool.query(`SELECT sr, issue, observation, impact_on_pump, severity, recommended_spares FROM report_issue_observations WHERE report_id = $1 ORDER BY id ASC`, [id]),
       pool.query(`SELECT spare_name, pump_model, total_to_order FROM report_mandatory_spares WHERE report_id = $1 ORDER BY id ASC`, [id]),
     ]);
-
     report.images             = images.rows;
     report.technical_reports  = techReports.rows;
     report.checklist_items    = checklist.rows;
     report.issue_observations = issues.rows;
     report.mandatory_spares   = spares.rows;
-
     return res.status(200).json({ success: true, data: report });
-
   } catch (error) {
     console.error('Get report by ID error:', error);
     return Errors.internalError(res);
@@ -922,37 +873,31 @@ const getReportById = async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // GET /api/reports/:id/pdf
-// Pure pdfkit — zero system dependencies, works on Render/Railway
 // ────────────────────────────────────────────────────────────
 const generateReportPdf = async (req, res) => {
   try {
     const { id } = req.params;
-
     const result = await pool.query(
       `SELECT r.*, t.name AS technician_name,
          COALESCE(r.client_name, c.name) AS client_name
        FROM reports r
-       LEFT JOIN jobs        j ON j.id = r.job_id
-       LEFT JOIN clients     c ON c.id = COALESCE(r.client_id, j.client_id)
+       LEFT JOIN jobs j ON j.id = r.job_id
+       LEFT JOIN clients c ON c.id = COALESCE(r.client_id, j.client_id)
        LEFT JOIN technicians t ON t.id = r.technician_id
        WHERE r.id = $1`, [id]
     );
     if (result.rows.length === 0) return Errors.reportNotFound(res);
-
     const report = result.rows[0];
-
     const [checklist, issues, spares] = await Promise.all([
       pool.query(`SELECT sr, description, status FROM report_checklist_items WHERE report_id = $1 ORDER BY sr ASC`, [id]),
       pool.query(`SELECT sr, issue, observation, impact_on_pump, severity, recommended_spares FROM report_issue_observations WHERE report_id = $1 ORDER BY id ASC`, [id]),
       pool.query(`SELECT spare_name, pump_model, total_to_order FROM report_mandatory_spares WHERE report_id = $1 ORDER BY id ASC`, [id]),
     ]);
-
     report.checklist_items    = checklist.rows;
     report.issue_observations = issues.rows;
     report.mandatory_spares   = spares.rows;
 
     const pdfBuffer = await generatePdfBuffer(report);
-
     res.set({
       'Content-Type':        'application/pdf',
       'Content-Disposition': `attachment; filename="ServiceReport_${id}.pdf"`,
@@ -960,7 +905,6 @@ const generateReportPdf = async (req, res) => {
       'Cache-Control':        'no-cache',
     });
     return res.send(pdfBuffer);
-
   } catch (error) {
     console.error('Generate report PDF error:', error);
     return Errors.internalError(res);
@@ -973,57 +917,37 @@ const generateReportPdf = async (req, res) => {
 const shareReport = async (req, res) => {
   try {
     const { id } = req.params;
-    let { to, subject, message } = req.body;
-
+    const { to, subject, message } = req.body;
     if (!to) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'to (email address) is required.', { field: 'to' });
-
     const recipients = Array.isArray(to) ? to : [to];
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    for (const addr of recipients) {
+    for (const addr of recipients)
       if (!emailRegex.test(addr)) return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, `Invalid email address: "${addr}".`, { field: 'to' });
-    }
 
     const result = await pool.query(
-      `SELECT r.*, t.name AS technician_name,
-         COALESCE(r.client_name, c.name) AS client_name
-       FROM reports r
-       LEFT JOIN jobs        j ON j.id = r.job_id
-       LEFT JOIN clients     c ON c.id = COALESCE(r.client_id, j.client_id)
-       LEFT JOIN technicians t ON t.id = r.technician_id
-       WHERE r.id = $1`, [id]
+      `SELECT r.*, t.name AS technician_name, COALESCE(r.client_name, c.name) AS client_name
+       FROM reports r LEFT JOIN jobs j ON j.id = r.job_id LEFT JOIN clients c ON c.id = COALESCE(r.client_id, j.client_id) LEFT JOIN technicians t ON t.id = r.technician_id WHERE r.id = $1`, [id]
     );
     if (result.rows.length === 0) return Errors.reportNotFound(res);
-
     const report = result.rows[0];
-
     const [checklist, issues, spares, techReports] = await Promise.all([
       pool.query(`SELECT sr, description, status FROM report_checklist_items WHERE report_id = $1 ORDER BY sr ASC`, [id]),
       pool.query(`SELECT sr, issue, observation, impact_on_pump, severity, recommended_spares FROM report_issue_observations WHERE report_id = $1 ORDER BY id ASC`, [id]),
       pool.query(`SELECT spare_name, pump_model, total_to_order FROM report_mandatory_spares WHERE report_id = $1 ORDER BY id ASC`, [id]),
       pool.query(`SELECT file_name, file_url, mime_type FROM technical_reports WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
     ]);
-
     report.checklist_items    = checklist.rows;
     report.issue_observations = issues.rows;
     report.mandatory_spares   = spares.rows;
 
     const emailSubject = subject || `AMC Service Report ${id} — ${report.title} | Vacuum Drying Technology India LLP`;
-    const customNote = message
-      ? `<tr><td style="padding:16px 40px;"><div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px 16px;color:#1e40af;font-size:14px;line-height:1.6;">${message.replace(/\n/g, '<br/>')}</div></td></tr>`
-      : '';
-
+    const customNote   = message ? `<tr><td style="padding:16px 40px;"><div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:14px 16px;color:#1e40af;font-size:14px;line-height:1.6;">${message.replace(/\n/g, '<br/>')}</div></td></tr>` : '';
     let html = buildReportEmailHtml(report, techReports.rows);
     if (customNote) html = html.replace('<!-- Greeting -->', `<!-- Custom Note -->\n${customNote}\n<!-- Greeting -->`);
 
     await sendNotification('report_submitted', { to: recipients.join(', '), subject: emailSubject, html });
-
-    await logActivity({
-      type: 'report', action: `Report ${id} shared via email to: ${recipients.join(', ')}`,
-      entity_type: 'report', entity_id: id, performed_by: req.user.id,
-    });
-
+    await logActivity({ type: 'report', action: `Report ${id} shared via email to: ${recipients.join(', ')}`, entity_type: 'report', entity_id: id, performed_by: req.user.id });
     return res.status(200).json({ success: true, message: `Report ${id} shared successfully to: ${recipients.join(', ')}.`, recipients });
-
   } catch (error) {
     console.error('Share report error:', error);
     return Errors.internalError(res);
@@ -1037,43 +961,22 @@ const updateReportStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-
     if (!status) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'status is required.', { field: 'status' });
     if (!isValidReportStatus(status)) return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS, 'Invalid status. Allowed values: Approved, Rejected.', { field: 'status' });
-
     const existCheck = await pool.query('SELECT * FROM reports WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
-
-    const report = existCheck.rows[0];
-    if (report.status !== 'Pending') {
-      return sendError(res, 400, ERROR_CODES.REPORT_ALREADY_REVIEWED,
-        `This report has already been ${report.status.toLowerCase()}. Only Pending reports can be reviewed.`);
-    }
+    if (existCheck.rows[0].status !== 'Pending')
+      return sendError(res, 400, ERROR_CODES.REPORT_ALREADY_REVIEWED, `This report has already been ${existCheck.rows[0].status.toLowerCase()}. Only Pending reports can be reviewed.`);
 
     const result = await pool.query(
-      `UPDATE reports SET status = $1, approved_by_user_id = $2, approved_at = NOW()
-       WHERE id = $3 RETURNING id, status, approved_by_user_id, approved_at`,
+      `UPDATE reports SET status=$1, approved_by_user_id=$2, approved_at=NOW() WHERE id=$3 RETURNING id, status, approved_by_user_id, approved_at`,
       [status, req.user.id, id]
     );
-
-    const techUserRes = await pool.query(
-      'SELECT t.user_id FROM technicians t JOIN reports r ON r.technician_id = t.id WHERE r.id = $1', [id]
-    );
-    if (techUserRes.rows[0]?.user_id) {
-      await notify({
-        event: 'report_reviewed', title: `Report ${status}`,
-        message: `Your report ${id} was ${status.toLowerCase()} by admin`,
-        entity_type: 'report', entity_id: id, user_id: techUserRes.rows[0].user_id,
-      }, wsManager);
-    }
-
-    await logActivity({
-      type: 'report', action: `Report ${id} ${status.toLowerCase()} by admin`,
-      entity_type: 'report', entity_id: id, performed_by: req.user.id,
-    });
-
+    const techUserRes = await pool.query('SELECT t.user_id FROM technicians t JOIN reports r ON r.technician_id = t.id WHERE r.id = $1', [id]);
+    if (techUserRes.rows[0]?.user_id)
+      await notify({ event: 'report_reviewed', title: `Report ${status}`, message: `Your report ${id} was ${status.toLowerCase()} by admin`, entity_type: 'report', entity_id: id, user_id: techUserRes.rows[0].user_id }, wsManager);
+    await logActivity({ type: 'report', action: `Report ${id} ${status.toLowerCase()} by admin`, entity_type: 'report', entity_id: id, performed_by: req.user.id });
     return res.status(200).json({ success: true, message: `Report ${id} ${status.toLowerCase()} successfully.`, data: result.rows[0] });
-
   } catch (error) {
     console.error('Update report status error:', error);
     return Errors.internalError(res);
@@ -1087,36 +990,25 @@ const addReportImage = async (req, res) => {
   try {
     const { id } = req.params;
     const images = Array.isArray(req.body) ? req.body : [req.body];
-
     const existCheck = await pool.query('SELECT id FROM reports WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
-
     const countCheck = await pool.query('SELECT COUNT(*) FROM report_images WHERE report_id = $1', [id]);
     const current = parseInt(countCheck.rows[0].count);
-    if (current + images.length > 20) {
-      return sendError(res, 400, ERROR_CODES.TOO_MANY_IMAGES,
-        `Cannot add ${images.length} image(s). Maximum 20 images per report (currently has ${current}).`);
-    }
-
+    if (current + images.length > 20) return sendError(res, 400, ERROR_CODES.TOO_MANY_IMAGES, `Cannot add ${images.length} image(s). Maximum 20 images per report (currently has ${current}).`);
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     for (const img of images) {
       if (!img.file_name || !img.file_url) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'Each image must have file_name and file_url.', { missing_fields: ['file_name', 'file_url'] });
       if (img.mime_type && !allowed.includes(img.mime_type)) return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE, `Invalid file type "${img.mime_type}". Allowed: ${allowed.join(', ')}.`, { field: 'mime_type', allowed });
     }
-
     const inserted = [];
     for (const img of images) {
       const r = await pool.query(
-        `INSERT INTO report_images (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
+        `INSERT INTO report_images (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
         [id, img.file_name, img.file_url, img.mime_type || 'image/jpeg', img.file_size_bytes || null, req.user.id]
       );
       inserted.push(r.rows[0]);
     }
-
     return res.status(201).json({ success: true, message: `${inserted.length} image(s) added to report ${id}.`, data: inserted });
-
   } catch (error) {
     console.error('Add report image error:', error);
     return Errors.internalError(res);
