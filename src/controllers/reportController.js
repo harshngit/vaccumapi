@@ -20,44 +20,42 @@ const generateReportId = async (client) => {
 };
 
 // ─── MASTER ISSUE DATA — full matrix from PDF Pages 2 & 3 ────
-// This is the complete static table shown in the PDF.
-// Selected rows (saved in DB) get a tick ✓.
 const MASTER_ISSUE_DATA = [
   {
     sr: 1, issue: 'Low Vaccum', rows: [
-      { observation: 'Valve damage (chock up)',  impact_on_pump: 'Overheat',                    severity: 'Med',  recommended_spares: 'Valve set'             },
-      { observation: 'Slide valve Damaged',       impact_on_pump: 'Abnormal Noise',              severity: 'High', recommended_spares: 'Slide valve or spring'  },
-      { observation: 'Piston ring Damaged',       impact_on_pump: 'Piston or cylinder damage',   severity: 'High', recommended_spares: 'Piston ring'            },
-      { observation: 'Oil seal Damaged',          impact_on_pump: 'Oil consumption Vacuum',      severity: 'Med',  recommended_spares: 'Sealing set'            },
+      { observation: 'Valve damage (chock up)',                      impact_on_pump: 'Overheat',                                    severity: 'Med',  recommended_spares: 'Valve set'                          },
+      { observation: 'Slide valve Damaged',                           impact_on_pump: 'Abnormal Noise',                              severity: 'High', recommended_spares: 'Slide valve or spring'              },
+      { observation: 'Piston ring Damaged',                           impact_on_pump: 'Piston or cylinder damage',                   severity: 'High', recommended_spares: 'Piston ring'                        },
+      { observation: 'Oil seal Damaged',                              impact_on_pump: 'Oil consumption Vacuum',                      severity: 'Med',  recommended_spares: 'Sealing set'                        },
     ],
   },
   {
     sr: 2, issue: 'Abnormal Sound', rows: [
-      { observation: 'Slide valve / Slide Valve spring Damaged', impact_on_pump: 'Overheat, Low Vacuum',                        severity: 'High', recommended_spares: 'Slide valve / Slide Valve spring'    },
-      { observation: 'Shell Bearing Damaged',                    impact_on_pump: 'Mechanical Damaged',                          severity: 'High', recommended_spares: 'Shell Bearing'                        },
-      { observation: 'Piston Pin / Bush Damaged',                impact_on_pump: 'Mechanical Damaged',                          severity: 'High', recommended_spares: 'Piston Pin / Bush'                    },
-      { observation: 'Flywheel / Distrubustion Rod Bearing Damaged', impact_on_pump: 'High Vibration',                          severity: 'High', recommended_spares: 'Flywheel / Distrubustion Rod Bearing' },
-      { observation: 'Distribution Control Pin Damaged',         impact_on_pump: 'Lubrication Pump Damage',                     severity: 'High', recommended_spares: 'Distribution Control Pin'             },
-      { observation: 'Pin For Outer Lever Damaged',              impact_on_pump: 'Tie Rod Head Damage',                         severity: 'High', recommended_spares: 'Pin For Outer Lever'                  },
-      { observation: 'Connecting Rod Damaged',                   impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Connecting Rod'                       },
-      { observation: 'Crankshaft Damaged',                       impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Crank Shaft'                          },
-      { observation: 'Inner Lever Damaged',                      impact_on_pump: 'Slide Valve Damage',                          severity: 'High', recommended_spares: 'Inner Lever'                          },
-      { observation: 'Cross Head Damaged',                       impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Cross Head'                           },
+      { observation: 'Slide valve / Slide Valve spring Damaged',      impact_on_pump: 'Overheat, Low Vacuum',                        severity: 'High', recommended_spares: 'Slide valve / Slide Valve spring'   },
+      { observation: 'Shell Bearing Damaged',                         impact_on_pump: 'Mechanical Damaged',                          severity: 'High', recommended_spares: 'Shell Bearing'                      },
+      { observation: 'Piston Pin / Bush Damaged',                     impact_on_pump: 'Mechanical Damaged',                          severity: 'High', recommended_spares: 'Piston Pin / Bush'                  },
+      { observation: 'Flywheel / Distrubustion Rod Bearing Damaged',  impact_on_pump: 'High Vibration',                              severity: 'High', recommended_spares: 'Flywheel / Distrubustion Rod Bearing'},
+      { observation: 'Distribution Control Pin Damaged',              impact_on_pump: 'Lubrication Pump Damage',                     severity: 'High', recommended_spares: 'Distribution Control Pin'           },
+      { observation: 'Pin For Outer Lever Damaged',                   impact_on_pump: 'Tie Rod Head Damage',                         severity: 'High', recommended_spares: 'Pin For Outer Lever'                },
+      { observation: 'Connecting Rod Damaged',                        impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Connecting Rod'                     },
+      { observation: 'Crankshaft Damaged',                            impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Crank Shaft'                        },
+      { observation: 'Inner Lever Damaged',                           impact_on_pump: 'Slide Valve Damage',                          severity: 'High', recommended_spares: 'Inner Lever'                        },
+      { observation: 'Cross Head Damaged',                            impact_on_pump: 'Mechanical Damage',                           severity: 'High', recommended_spares: 'Cross Head'                         },
     ],
   },
   {
     sr: 3, issue: 'Excessive Oil', rows: [
-      { observation: 'Gland Packing Damaged',         impact_on_pump: 'Oil Leakage and Smoke',        severity: 'Med',  recommended_spares: 'Gland Packing'        },
-      { observation: 'Oil seal Damaged',              impact_on_pump: 'Oil Leakage',                  severity: 'High', recommended_spares: 'Oil seal'             },
-      { observation: 'Nylon Tubing Damaged',          impact_on_pump: 'Oil Leakage',                  severity: 'High', recommended_spares: 'Nylon Tubing'         },
-      { observation: 'Oil connector / Oiler Damaged', impact_on_pump: 'Oil Leakage',                  severity: 'High', recommended_spares: 'Oil connector / Oiler' },
-      { observation: 'Piston Rod Damaged',            impact_on_pump: 'Oil Consumption and Smoke',    severity: 'Med',  recommended_spares: 'Piston Rod'           },
+      { observation: 'Gland Packing Damaged',                         impact_on_pump: 'Oil Leakage and Smoke',                       severity: 'Med',  recommended_spares: 'Gland Packing'                      },
+      { observation: 'Oil seal Damaged',                              impact_on_pump: 'Oil Leakage',                                 severity: 'High', recommended_spares: 'Oil seal'                           },
+      { observation: 'Nylon Tubing Damaged',                          impact_on_pump: 'Oil Leakage',                                 severity: 'High', recommended_spares: 'Nylon Tubing'                       },
+      { observation: 'Oil connector / Oiler Damaged',                 impact_on_pump: 'Oil Leakage',                                 severity: 'High', recommended_spares: 'Oil connector / Oiler'              },
+      { observation: 'Piston Rod Damaged',                            impact_on_pump: 'Oil Consumption and Smoke',                   severity: 'Med',  recommended_spares: 'Piston Rod'                         },
     ],
   },
   {
     sr: 4, issue: 'No Lubrication', rows: [
-      { observation: 'Oil Filter Chocked / Damaged',    impact_on_pump: 'Overheat, Wear and Tare on Cylinder and Piston', severity: 'High', recommended_spares: 'Oil Filter Choked'      },
-      { observation: 'Lubrication Pump/ Lever Damaged', impact_on_pump: 'Overheat, Wear and Tare on Cylinder and Piston', severity: 'High', recommended_spares: 'Lubrication Pump / Lever' },
+      { observation: 'Oil Filter Chocked / Damaged',                  impact_on_pump: 'Overheat, Wear and Tare on Cylinder and Piston', severity: 'High', recommended_spares: 'Oil Filter Choked'             },
+      { observation: 'Lubrication Pump/ Lever Damaged',               impact_on_pump: 'Overheat, Wear and Tare on Cylinder and Piston', severity: 'High', recommended_spares: 'Lubrication Pump / Lever'      },
     ],
   },
 ];
@@ -75,7 +73,10 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
       </ul>
     </td></tr>` : '';
 
-  const checklistItems = report.checklist_items || [];
+  const checklistItems   = report.checklist_items    || [];
+  const issueItems       = report.issue_observations || [];
+  const spareItems       = report.mandatory_spares   || [];
+
   const checklistSection = checklistItems.length > 0 ? `
     <tr><td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
       <strong style="color:#1e40af;font-size:14px;">Preventive Maintenance Checklist</strong>
@@ -86,7 +87,6 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
       <td style="padding:8px 20px;border-bottom:1px solid #f9f9f9;color:#111827;font-size:13px;">${item.status || '—'}</td>
     </tr>`).join('')}` : '';
 
-  const issueItems = report.issue_observations || [];
   const issuesSection = issueItems.length > 0 ? `
     <tr><td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
       <strong style="color:#1e40af;font-size:14px;">Detailed Issue Observations</strong>
@@ -97,7 +97,6 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
       <td style="padding:8px 20px;border-bottom:1px solid #f9f9f9;color:#111827;font-size:13px;">${item.severity || '—'} | ${item.recommended_spares || '—'}</td>
     </tr>`).join('')}` : '';
 
-  const spareItems = report.mandatory_spares || [];
   const sparesSection = spareItems.length > 0 ? `
     <tr><td colspan="2" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;background:#f9fafb;">
       <strong style="color:#1e40af;font-size:14px;">Mandatory Spares</strong>
@@ -138,7 +137,6 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
             <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;width:40%;color:#6b7280;font-size:13px;">Company Name</td>
                 <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;font-weight:600;">${report.company_name || report.client_name || '—'}</td></tr>
             ${report.contact_person ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Contact Person</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.contact_person}</td></tr>` : ''}
-            ${report.model_serial_installation ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Model / S/N / Year</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.model_serial_installation}</td></tr>` : ''}
             ${report.po_number ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">PO Number</td><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${report.po_number}</td></tr>` : ''}
             <tr><td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#6b7280;font-size:13px;">Service Date</td>
                 <td style="padding:12px 20px;border-bottom:1px solid #f0f0f0;color:#111827;font-size:14px;">${formatDate(report.report_date)}</td></tr>
@@ -162,8 +160,8 @@ const buildReportEmailHtml = (report, technicalFiles = []) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// PDF GENERATION — exact VDT form layout
-// Issue matrix: ALL rows shown, selected ones get ✓ tick
+// PDF GENERATION
+// Fixed: proper column widths so "Severity" never wraps
 // ────────────────────────────────────────────────────────────
 const generatePdfBuffer = (report) => {
   return new Promise((resolve, reject) => {
@@ -184,17 +182,41 @@ const generatePdfBuffer = (report) => {
       doc.on('end',  () => resolve(Buffer.concat(chunks)));
       doc.on('error', e => reject(e));
 
-      const L   = 45;
-      const R   = 45;
-      const PW  = 595 - L - R;   // 505
+      // ── Layout constants ────────────────────────────────────
+      const L   = 45;          // left margin
+      const PW  = 595 - 90;    // A4 = 595, margins = 45+45, usable = 505
       const BLK = '#000000';
       const GRAY = '#555555';
       const ROW_H = 22;
 
+      // ── Issue matrix FIXED column widths ─────────────────────
+      // Total = PW = 505
+      // Tick=14, SR=22, Issue=62, Obs=120, Impact=108, Severity=32, Spares=147
+      const TICK_W = 14;
+      const IC = {
+        sr:     22,
+        issue:  62,
+        obs:    118,
+        impact: 108,
+        sev:    32,   // ← was 38, now exactly "High\n" width + padding — no wrap
+      };
+      IC.spares = PW - TICK_W - IC.sr - IC.issue - IC.obs - IC.impact - IC.sev;
+      // spares = 505-14-22-62-118-108-32 = 149
+
+      const IX = {
+        tick:   L,
+        sr:     L + TICK_W,
+        issue:  L + TICK_W + IC.sr,
+        obs:    L + TICK_W + IC.sr + IC.issue,
+        impact: L + TICK_W + IC.sr + IC.issue + IC.obs,
+        sev:    L + TICK_W + IC.sr + IC.issue + IC.obs + IC.impact,
+        spares: L + TICK_W + IC.sr + IC.issue + IC.obs + IC.impact + IC.sev,
+      };
+
       const formatDate = (d) =>
         d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
-      // ── Helpers ──────────────────────────────────────────────
+      // ── Drawing helpers ──────────────────────────────────────
       const border = (x, y, w, h) =>
         doc.rect(x, y, w, h).strokeColor(BLK).lineWidth(0.5).stroke();
 
@@ -204,7 +226,7 @@ const generatePdfBuffer = (report) => {
       const vline = (x, y1, y2, lw = 0.5) =>
         doc.moveTo(x, y1).lineTo(x, y2).strokeColor(BLK).lineWidth(lw).stroke();
 
-      // Real checkbox — empty square, or filled solid black square
+      // Real checkbox: empty square or filled black square
       const checkbox = (x, y, filled) => {
         const S = 7;
         doc.rect(x, y, S, S).strokeColor(BLK).lineWidth(0.6).stroke();
@@ -217,44 +239,21 @@ const generatePdfBuffer = (report) => {
         doc.fontSize(22).fillColor(BLK).font('Helvetica-Bold')
            .text('Vacuum Drying Technology India LLP', L, y, { width: PW, align: 'center' });
         y += 28;
-        doc.fontSize(8).fillColor(BLK).font('Helvetica')
+        doc.fontSize(7.5).fillColor(BLK).font('Helvetica')
            .text('101, Om Dronagiri, Girivihar Nagar, Shantivan, opp. Western Express Highway, Borivali (East), Mumbai - 400 066.', L, y, { width: PW, align: 'center' });
         y += 11;
-        doc.fontSize(8).text('Contact No. : 9833594555 / 9819982801', L, y, { width: PW, align: 'center' });
+        doc.fontSize(7.5).text('Contact No. : 9833594555 / 9819982801', L, y, { width: PW, align: 'center' });
         y += 11;
-        doc.fontSize(8).text('Email : info@electromechengineering.com / clientservices@electromechengineering.com', L, y, { width: PW, align: 'center' });
-        y += 14;
+        doc.fontSize(7.5).text('Email : info@electromechengineering.com / clientservices@electromechengineering.com', L, y, { width: PW, align: 'center' });
+        y += 12;
         hline(L, y, L + PW, 1.2);
         return y + 10;
       };
 
-      // ── Column widths for issue matrix ───────────────────────
-      // Tick col | SR | Issue | Observation | Impact | Severity | Spares
-      const TICK_W = 16;
-      const IC = {
-        sr:     24,
-        issue:  68,
-        obs:    122,
-        impact: 100,
-        sev:    38,
-      };
-      IC.spares = PW - TICK_W - IC.sr - IC.issue - IC.obs - IC.impact - IC.sev;
-
-      const IX = {
-        tick:   L,
-        sr:     L + TICK_W,
-        issue:  L + TICK_W + IC.sr,
-        obs:    L + TICK_W + IC.sr + IC.issue,
-        impact: L + TICK_W + IC.sr + IC.issue + IC.obs,
-        sev:    L + TICK_W + IC.sr + IC.issue + IC.obs + IC.impact,
-        spares: L + TICK_W + IC.sr + IC.issue + IC.obs + IC.impact + IC.sev,
-      };
-
-      // ── Draw issue matrix header row ─────────────────────────
+      // ── Issue matrix column header ───────────────────────────
       const drawIssueHeader = (y) => {
         const H = 20;
         border(L, y, PW, H);
-        // Vertical dividers (no divider for tick column — it's borderless)
         vline(IX.sr,     y, y + H);
         vline(IX.issue,  y, y + H);
         vline(IX.obs,    y, y + H);
@@ -262,13 +261,14 @@ const generatePdfBuffer = (report) => {
         vline(IX.sev,    y, y + H);
         vline(IX.spares, y, y + H);
 
-        doc.fontSize(8.5).fillColor(BLK).font('Helvetica-Bold')
-           .text('SR',                  IX.sr     + 3, y + 5, { width: IC.sr - 6 })
-           .text('Issue',               IX.issue  + 3, y + 5, { width: IC.issue - 6 })
-           .text('Observation',         IX.obs    + 3, y + 5, { width: IC.obs - 6 })
-           .text('Impact on Pump',      IX.impact + 3, y + 5, { width: IC.impact - 6 })
-           .text('Severity',            IX.sev    + 3, y + 5, { width: IC.sev - 6 })
-           .text('Recommended Spares',  IX.spares + 3, y + 5, { width: IC.spares - 6 });
+        // Use font size 8 so "Severity" fits in the narrow column
+        doc.fontSize(8).fillColor(BLK).font('Helvetica-Bold')
+           .text('SR',                 IX.sr     + 2, y + 5, { width: IC.sr - 4,     lineBreak: false })
+           .text('Issue',              IX.issue  + 3, y + 5, { width: IC.issue - 6,  lineBreak: false })
+           .text('Observation',        IX.obs    + 3, y + 5, { width: IC.obs - 6,    lineBreak: false })
+           .text('Impact on Pump',     IX.impact + 3, y + 5, { width: IC.impact - 6, lineBreak: false })
+           .text('Severity',           IX.sev    + 2, y + 5, { width: IC.sev - 4,    lineBreak: false })
+           .text('Recommended Spares', IX.spares + 3, y + 5, { width: IC.spares - 6, lineBreak: false });
         return y + H;
       };
 
@@ -277,12 +277,11 @@ const generatePdfBuffer = (report) => {
       // ────────────────────────────────────────────────────────
       let y = drawPageHeader();
 
-      // Section title
       doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
          .text('AMC Service Report - Italvacuum Pump', L, y, { width: PW, align: 'center' });
       y += 18;
 
-      // Client info table columns
+      // Client info table
       const COL1 = Math.round(PW * 0.42);
       const COL2 = PW - COL1;
 
@@ -299,16 +298,16 @@ const generatePdfBuffer = (report) => {
       border(L, y, PW, ROW_H);
       vline(L + COL1, y, y + ROW_H);
       doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
-         .text('Field',   L + 5,        y + 6, { width: COL1 - 10 })
-         .text('Details', L + COL1 + 5, y + 6, { width: COL2 - 10 });
+         .text('Field',   L + 5,        y + 6, { width: COL1 - 10, lineBreak: false })
+         .text('Details', L + COL1 + 5, y + 6, { width: COL2 - 10, lineBreak: false });
       y += ROW_H;
 
       clientRows.forEach(([label, val]) => {
         border(L, y, PW, ROW_H);
         vline(L + COL1, y, y + ROW_H);
         doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
-           .text(label, L + 5, y + 6, { width: COL1 - 10 })
-           .text(val,   L + COL1 + 5, y + 6, { width: COL2 - 10 });
+           .text(label, L + 5,        y + 6, { width: COL1 - 10, lineBreak: false })
+           .text(val,   L + COL1 + 5, y + 6, { width: COL2 - 10, lineBreak: false });
         y += ROW_H;
       });
 
@@ -320,21 +319,20 @@ const generatePdfBuffer = (report) => {
       y += 14;
 
       const ALL_CHECKLIST = [
-        { sr: 1, description: 'Check the oil level in the oil reserves.',                       options: ['OK', 'Topped Up'] },
-        { sr: 2, description: 'Check the oil level on the Root Compressors (If available).',    options: ['OK', 'Topped Up', 'NA'] },
-        { sr: 3, description: 'Check the lubrication circuit.',                                 options: ['Normal', 'Leakage', 'Blockage'] },
-        { sr: 4, description: 'Check the discharge valves.',                                    options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
-        { sr: 5, description: 'Check & adjust the Gland packing.',                             options: ['OK', 'Adjusted / Replaced', 'Spare Required'] },
-        { sr: 6, description: 'Oil filter cleaning.',                                          options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
-        { sr: 7, description: 'Greasing of the pump.',                                         options: ['OK', 'Done'] },
-        { sr: 8, description: 'Check the oil seal Ring.',                                      options: ['OK', 'Replaced', 'Spare Required'] },
-        { sr: 9, description: 'Check & adjustment of the driving belts.',                      options: ['OK', 'Replaced', 'Spare Required'] },
+        { sr: 1, description: 'Check the oil level in the oil reserves.',                      options: ['OK', 'Topped Up'] },
+        { sr: 2, description: 'Check the oil level on the Root Compressors (If available).',   options: ['OK', 'Topped Up', 'NA'] },
+        { sr: 3, description: 'Check the lubrication circuit.',                                options: ['Normal', 'Leakage', 'Blockage'] },
+        { sr: 4, description: 'Check the discharge valves.',                                   options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
+        { sr: 5, description: 'Check & adjust the Gland packing.',                            options: ['OK', 'Adjusted / Replaced', 'Spare Required'] },
+        { sr: 6, description: 'Oil filter cleaning.',                                         options: ['OK', 'Cleaned / Replaced', 'Spare Required'] },
+        { sr: 7, description: 'Greasing of the pump.',                                        options: ['OK', 'Done'] },
+        { sr: 8, description: 'Check the oil seal Ring.',                                     options: ['OK', 'Replaced', 'Spare Required'] },
+        { sr: 9, description: 'Check & adjustment of the driving belts.',                     options: ['OK', 'Replaced', 'Spare Required'] },
       ];
 
       const checklistMap = {};
       (report.checklist_items || []).forEach(item => { checklistMap[item.sr] = item.status || ''; });
 
-      // Table header
       const SR_W   = 28;
       const DESC_W = Math.round(PW * 0.52);
       const STAT_W = PW - SR_W - DESC_W;
@@ -343,15 +341,15 @@ const generatePdfBuffer = (report) => {
       vline(L + SR_W,          y, y + ROW_H);
       vline(L + SR_W + DESC_W, y, y + ROW_H);
       doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
-         .text('SR',          L + 8,                 y + 6, { width: SR_W - 10 })
-         .text('Description', L + SR_W + 5,          y + 6, { width: DESC_W - 10 })
-         .text('Status',      L + SR_W + DESC_W + 5, y + 6, { width: STAT_W - 10 });
+         .text('SR',          L + 8,                 y + 6, { width: SR_W - 10,   lineBreak: false })
+         .text('Description', L + SR_W + 5,          y + 6, { width: DESC_W - 10, lineBreak: false })
+         .text('Status',      L + SR_W + DESC_W + 5, y + 6, { width: STAT_W - 10, lineBreak: false });
       y += ROW_H;
 
       ALL_CHECKLIST.forEach(item => {
-        const selectedStatus = checklistMap[item.sr] || '';
-        const needsTwoLines  = [4, 5, 6].includes(item.sr);
-        const cellH          = needsTwoLines ? 36 : ROW_H;
+        const sel          = checklistMap[item.sr] || '';
+        const twoLines     = [4, 5, 6].includes(item.sr);
+        const cellH        = twoLines ? 36 : ROW_H;
 
         if (y + cellH > 780) { doc.addPage(); y = drawPageHeader(); }
 
@@ -360,36 +358,32 @@ const generatePdfBuffer = (report) => {
         vline(L + SR_W + DESC_W, y, y + cellH);
 
         doc.fontSize(9).fillColor(BLK).font('Helvetica')
-           .text(String(item.sr), L + 8, y + (cellH / 2) - 5, { width: SR_W - 10 });
+           .text(String(item.sr), L + 8, y + (cellH / 2) - 5, { width: SR_W - 10, lineBreak: false });
         doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
            .text(item.description, L + SR_W + 5, y + (cellH / 2) - 5, { width: DESC_W - 10 });
 
         const statusX = L + SR_W + DESC_W + 6;
-
-        if (!needsTwoLines) {
+        if (!twoLines) {
           let cx = statusX;
           item.options.forEach(opt => {
-            checkbox(cx, y + 7, selectedStatus === opt);
+            checkbox(cx, y + 7, sel === opt);
             doc.fontSize(8).fillColor(BLK).font('Helvetica')
                .text(opt, cx + 10, y + 7, { lineBreak: false });
             cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
           });
         } else {
-          // Two-line layout for rows 4, 5, 6
           const topOpts = item.options.slice(0, 2);
           const btmOpts = item.options.slice(2);
           let cx = statusX;
           topOpts.forEach(opt => {
-            checkbox(cx, y + 5, selectedStatus === opt);
-            doc.fontSize(8).fillColor(BLK).font('Helvetica')
-               .text(opt, cx + 10, y + 5, { lineBreak: false });
+            checkbox(cx, y + 5, sel === opt);
+            doc.fontSize(8).fillColor(BLK).font('Helvetica').text(opt, cx + 10, y + 5, { lineBreak: false });
             cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
           });
           cx = statusX;
           btmOpts.forEach(opt => {
-            checkbox(cx, y + 21, selectedStatus === opt);
-            doc.fontSize(8).fillColor(BLK).font('Helvetica')
-               .text(opt, cx + 10, y + 21, { lineBreak: false });
+            checkbox(cx, y + 21, sel === opt);
+            doc.fontSize(8).fillColor(BLK).font('Helvetica').text(opt, cx + 10, y + 21, { lineBreak: false });
             cx += 10 + doc.widthOfString(opt, { fontSize: 8 }) + 8;
           });
         }
@@ -399,7 +393,7 @@ const generatePdfBuffer = (report) => {
       y += 14;
 
       // ── Site & Environmental Conditions ─────────────────────
-      if (y + 95 > 780) { doc.addPage(); y = drawPageHeader(); }
+      if (y + 90 > 780) { doc.addPage(); y = drawPageHeader(); }
 
       const envLines = [
         'Maintain the pump installation area in a clean, dry and workable environment.',
@@ -422,16 +416,14 @@ const generatePdfBuffer = (report) => {
          .text('Note : Client is obliged to maintain the above points.', L, y);
 
       // ────────────────────────────────────────────────────────
-      // PAGE 2+: ISSUE OBSERVATION MATRIX
-      // Shows ALL rows from master data. Selected = ✓ tick beside row.
+      // PAGE 2: ISSUE OBSERVATION MATRIX
+      // Shows ALL rows. Selected ones get tick ✓.
+      // Fixed column layout: severity always fits on one line.
       // ────────────────────────────────────────────────────────
-
-      // Build a Set of selected observation keys: "issue||observation"
       const selectedSet = new Set();
       (report.issue_observations || []).forEach(obs => {
-        if (obs.issue && obs.observation) {
+        if (obs.issue && obs.observation)
           selectedSet.add(`${obs.issue}||${obs.observation}`);
-        }
       });
 
       doc.addPage();
@@ -447,11 +439,17 @@ const generatePdfBuffer = (report) => {
         issueGroup.rows.forEach((row, rowIdx) => {
           const isSelected = selectedSet.has(`${issueGroup.issue}||${row.observation}`);
 
-          // Estimate row height
-          const obsH    = doc.heightOfString(row.observation || '', { width: IC.obs - 6, fontSize: 8.5 });
-          const impH    = doc.heightOfString(row.impact_on_pump || '', { width: IC.impact - 6, fontSize: 8.5 });
-          const sparesH = doc.heightOfString(row.recommended_spares || '', { width: IC.spares - 6, fontSize: 8.5 });
-          const rowH    = Math.max(obsH, impH, sparesH, 18) + 10;
+          // ── Calculate row height accurately ──────────────────
+          // Measure each cell's text height at font size 8 — take the max
+          const measure = (text, w) =>
+            doc.heightOfString(text || '', { width: w, fontSize: 8 });
+
+          const hObs    = measure(row.observation,        IC.obs - 6);
+          const hImpact = measure(row.impact_on_pump,     IC.impact - 6);
+          const hSpares = measure(row.recommended_spares, IC.spares - 6);
+          // severity is always "Med" or "High" — one word, never wraps in IC.sev=32
+          const hSev    = 10;
+          const rowH    = Math.max(hObs, hImpact, hSpares, hSev, 16) + 10;
 
           if (y + rowH > 780) {
             doc.addPage();
@@ -459,7 +457,7 @@ const generatePdfBuffer = (report) => {
             y = drawIssueHeader(y);
           }
 
-          // Draw the full row border + internal vertical lines
+          // Row border + internal vertical dividers
           border(L, y, PW, rowH);
           vline(IX.sr,     y, y + rowH);
           vline(IX.issue,  y, y + rowH);
@@ -468,38 +466,43 @@ const generatePdfBuffer = (report) => {
           vline(IX.sev,    y, y + rowH);
           vline(IX.spares, y, y + rowH);
 
-          const ty = y + 5; // text y
+          const ty = y + 5;
 
-          // ── Tick mark in leftmost column if selected ─────────
+          // Tick column — ✓ if selected
           if (isSelected) {
-            doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
-               .text('✓', IX.tick + 2, ty, { width: TICK_W - 4 });
+            doc.fontSize(10).fillColor(BLK).font('Helvetica-Bold')
+               .text("'", IX.tick + 2, ty, { width: TICK_W - 4, lineBreak: false });
           }
 
-          // ── SR: only on the first row of each issue group ────
+          // SR — only on first row of group
           if (rowIdx === 0) {
-            doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
-               .text(String(issueGroup.sr), IX.sr + 3, ty, { width: IC.sr - 6 });
+            doc.fontSize(8).fillColor(BLK).font('Helvetica')
+               .text(String(issueGroup.sr), IX.sr + 3, ty, { width: IC.sr - 6, lineBreak: false });
           }
 
-          // ── Issue: only on the first row of each group ───────
+          // Issue — only on first row of group
           if (rowIdx === 0) {
-            doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
+            doc.fontSize(8).fillColor(BLK).font('Helvetica')
                .text(issueGroup.issue, IX.issue + 3, ty, { width: IC.issue - 6 });
           }
 
-          // ── Observation, Impact, Severity, Spares ────────────
-          doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
-             .text(row.observation        || '', IX.obs    + 3, ty, { width: IC.obs - 6 })
-             .text(row.impact_on_pump     || '', IX.impact + 3, ty, { width: IC.impact - 6 })
-             .text(row.severity           || '', IX.sev    + 3, ty, { width: IC.sev - 6 })
+          // Observation, Impact, Severity, Spares — all rows
+          doc.fontSize(8).fillColor(BLK).font('Helvetica')
+             .text(row.observation     || '', IX.obs    + 3, ty, { width: IC.obs - 6 })
+             .text(row.impact_on_pump  || '', IX.impact + 3, ty, { width: IC.impact - 6 });
+
+          // Severity — single word, fits in IC.sev=32 at font size 8
+          doc.fontSize(8).fillColor(BLK).font('Helvetica')
+             .text(row.severity || '', IX.sev + 2, ty, { width: IC.sev - 4, lineBreak: false });
+
+          doc.fontSize(8).fillColor(BLK).font('Helvetica')
              .text(row.recommended_spares || '', IX.spares + 3, ty, { width: IC.spares - 6 });
 
           y += rowH;
         });
       });
 
-      // ── Remarks section — writing lines ──────────────────────
+      // ── Remarks section — writing lines ─────────────────────
       y += 20;
       if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
 
@@ -527,29 +530,23 @@ const generatePdfBuffer = (report) => {
          .text('Mandatory Spares - AMC Compliance Matrix', L, y, { width: PW, align: 'center' });
       y += 16;
 
-      // Spares table columns
       const SC = { name: Math.round(PW * 0.55), model: Math.round(PW * 0.25) };
       SC.qty = PW - SC.name - SC.model;
       const SX = { name: L, model: L + SC.name, qty: L + SC.name + SC.model };
 
-      // Header
       border(L, y, PW, ROW_H);
       vline(SX.model, y, y + ROW_H);
       vline(SX.qty,   y, y + ROW_H);
       doc.fontSize(9).fillColor(BLK).font('Helvetica-Bold')
-         .text('Spare Name',             SX.name  + 5, y + 6, { width: SC.name - 10 })
-         .text('Pump Model',             SX.model + 5, y + 6, { width: SC.model - 10 })
-         .text('Total To Order (Total)', SX.qty   + 5, y + 6, { width: SC.qty - 10 });
+         .text('Spare Name',             SX.name  + 5, y + 6, { width: SC.name - 10,  lineBreak: false })
+         .text('Pump Model',             SX.model + 5, y + 6, { width: SC.model - 10, lineBreak: false })
+         .text('Total To Order (Total)', SX.qty   + 5, y + 6, { width: SC.qty - 10,   lineBreak: false });
       y += ROW_H;
 
       const DEFAULT_SPARE_NAMES = [
-        'Complete set of Gaskets',
-        'Complete set of Valve Gasket',
-        'Complete set of Valve Spring',
-        'Complete set of Valve Screw',
-        'Complete set of Oil Connectors',
-        'Ferrule / Insert / Reducer set',
-        'Nylon Tubing Set',
+        'Complete set of Gaskets', 'Complete set of Valve Gasket', 'Complete set of Valve Spring',
+        'Complete set of Valve Screw', 'Complete set of Oil Connectors',
+        'Ferrule / Insert / Reducer set', 'Nylon Tubing Set',
       ];
 
       const spareMap = {};
@@ -559,9 +556,7 @@ const generatePdfBuffer = (report) => {
         ...DEFAULT_SPARE_NAMES.map(name => spareMap[name] || { spare_name: name, pump_model: '', total_to_order: '' }),
         ...(report.mandatory_spares || []).filter(s => !DEFAULT_SPARE_NAMES.includes(s.spare_name)),
       ];
-
-      const MIN_ROWS = 12;
-      while (allSpares.length < MIN_ROWS) allSpares.push({ spare_name: '', pump_model: '', total_to_order: '' });
+      while (allSpares.length < 12) allSpares.push({ spare_name: '', pump_model: '', total_to_order: '' });
 
       allSpares.forEach(s => {
         if (y + ROW_H > 780) { doc.addPage(); y = drawPageHeader(); }
@@ -569,16 +564,15 @@ const generatePdfBuffer = (report) => {
         vline(SX.model, y, y + ROW_H);
         vline(SX.qty,   y, y + ROW_H);
         doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
-           .text(s.spare_name || '',     SX.name  + 5, y + 6, { width: SC.name - 10 })
-           .text(s.pump_model || '',     SX.model + 5, y + 6, { width: SC.model - 10 })
-           .text(s.total_to_order || '', SX.qty   + 5, y + 6, { width: SC.qty - 10 });
+           .text(s.spare_name || '',     SX.name  + 5, y + 6, { width: SC.name - 10,  lineBreak: false })
+           .text(s.pump_model || '',     SX.model + 5, y + 6, { width: SC.model - 10, lineBreak: false })
+           .text(s.total_to_order || '', SX.qty   + 5, y + 6, { width: SC.qty - 10,   lineBreak: false });
         y += ROW_H;
       });
 
       y += 16;
       if (y + 80 > 780) { doc.addPage(); y = drawPageHeader(); }
 
-      // Compliance notes
       doc.fontSize(9).fillColor(BLK).font('Helvetica-BoldOblique')
          .text('Commercial & Compliance Notes (AMC Aligned)', L, y);
       y += 14;
@@ -596,7 +590,7 @@ const generatePdfBuffer = (report) => {
       });
 
       y += 10;
-      if (y + 50 > 780) { doc.addPage(); y = drawPageHeader(); }
+      if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
 
       doc.fontSize(9).fillColor(BLK).font('Helvetica-BoldOblique').text('Client Obligations', L, y);
       y += 13;
@@ -611,22 +605,21 @@ const generatePdfBuffer = (report) => {
       if (y + 80 > 780) { doc.addPage(); y = drawPageHeader(); }
       y += 6;
 
-      const sigH    = 72;
-      const halfSW  = Math.floor(PW / 2);
+      const sigH   = 72;
+      const halfSW = Math.floor(PW / 2);
 
       border(L, y, PW, sigH);
       vline(L + halfSW, y, y + sigH);
       hline(L, y + 18, L + PW);
 
       doc.fontSize(8.5).fillColor(BLK).font('Helvetica-Bold')
-         .text('Vacuum Drying Technology Representative', L + 5,           y + 4, { width: halfSW - 10 })
-         .text('Client Representative',                  L + halfSW + 5,  y + 4, { width: halfSW - 10 });
+         .text('Vacuum Drying Technology Representative', L + 5,          y + 4, { width: halfSW - 10 })
+         .text('Client Representative',                  L + halfSW + 5, y + 4, { width: halfSW - 10 });
 
-      const sigLabels = ['Name :', 'Sign :', 'Date :'];
       const sigVdt    = [report.vdt_representative_name || '', '', formatDate(report.report_date)];
       const sigClient = [report.client_representative_name || '', '', formatDate(report.report_date)];
       let sy = y + 21;
-      sigLabels.forEach((lbl, i) => {
+      ['Name :', 'Sign :', 'Date :'].forEach((lbl, i) => {
         hline(L, sy, L + PW);
         doc.fontSize(8.5).fillColor(BLK).font('Helvetica')
            .text(`${lbl}  ${sigVdt[i]}`,    L + 5,          sy + 3, { width: halfSW - 10 })
@@ -635,7 +628,6 @@ const generatePdfBuffer = (report) => {
       });
 
       doc.end();
-
     } catch (err) {
       reject(err);
     }
@@ -653,18 +645,18 @@ const getReports = async (req, res) => {
     const { status, technician_id, job_id, from_date, to_date, client_id, po_number } = req.query;
 
     if (status && !['Pending', 'Approved', 'Rejected'].includes(status)) {
-      return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS, 'Invalid status. Allowed: Pending, Approved, Rejected.', { field: 'status' });
+      return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS, 'Invalid status.', { field: 'status' });
     }
 
     const conditions = [];
     const values     = [];
-    if (status)        { values.push(status);                conditions.push(`r.status = $${values.length}`); }
+    if (status)        { values.push(status);                 conditions.push(`r.status = $${values.length}`); }
     if (technician_id) { values.push(parseInt(technician_id)); conditions.push(`r.technician_id = $${values.length}`); }
-    if (job_id)        { values.push(job_id);                conditions.push(`r.job_id = $${values.length}`); }
-    if (client_id)     { values.push(parseInt(client_id));   conditions.push(`r.client_id = $${values.length}`); }
-    if (po_number)     { values.push(po_number);             conditions.push(`r.po_number = $${values.length}`); }
-    if (from_date)     { values.push(from_date);             conditions.push(`r.report_date >= $${values.length}`); }
-    if (to_date)       { values.push(to_date);               conditions.push(`r.report_date <= $${values.length}`); }
+    if (job_id)        { values.push(job_id);                 conditions.push(`r.job_id = $${values.length}`); }
+    if (client_id)     { values.push(parseInt(client_id));    conditions.push(`r.client_id = $${values.length}`); }
+    if (po_number)     { values.push(po_number);              conditions.push(`r.po_number = $${values.length}`); }
+    if (from_date)     { values.push(from_date);              conditions.push(`r.report_date >= $${values.length}`); }
+    if (to_date)       { values.push(to_date);                conditions.push(`r.report_date <= $${values.length}`); }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const countResult = await pool.query(`SELECT COUNT(*) FROM reports r ${where}`, values);
@@ -685,8 +677,8 @@ const getReports = async (req, res) => {
          (SELECT COUNT(*) FROM technical_reports tr WHERE tr.report_id = r.id) AS technical_report_count,
          r.created_at, r.updated_at
        FROM reports r
-       LEFT JOIN jobs        j ON j.id = r.job_id
-       LEFT JOIN clients     c ON c.id = COALESCE(r.client_id, j.client_id)
+       LEFT JOIN jobs j ON j.id = r.job_id
+       LEFT JOIN clients c ON c.id = COALESCE(r.client_id, j.client_id)
        LEFT JOIN technicians t ON t.id = r.technician_id
        ${where}
        ORDER BY r.created_at DESC
@@ -779,7 +771,8 @@ const createReport = async (req, res) => {
     const createdReport = result.rows[0];
 
     for (const item of checklist_items)
-      await dbClient.query(`INSERT INTO report_checklist_items (report_id, sr, description, status) VALUES ($1,$2,$3,$4)`, [reportId, item.sr, item.description, item.status || null]);
+      await dbClient.query(`INSERT INTO report_checklist_items (report_id, sr, description, status) VALUES ($1,$2,$3,$4)`,
+        [reportId, item.sr, item.description, item.status || null]);
 
     for (const obs of issue_observations)
       await dbClient.query(
@@ -788,7 +781,8 @@ const createReport = async (req, res) => {
       );
 
     for (const spare of mandatory_spares)
-      await dbClient.query(`INSERT INTO report_mandatory_spares (report_id, spare_name, pump_model, total_to_order) VALUES ($1,$2,$3,$4)`, [reportId, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]);
+      await dbClient.query(`INSERT INTO report_mandatory_spares (report_id, spare_name, pump_model, total_to_order) VALUES ($1,$2,$3,$4)`,
+        [reportId, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]);
 
     const savedTechnicalReports = [];
     for (const doc of technical_reports) {
@@ -896,7 +890,6 @@ const generateReportPdf = async (req, res) => {
     report.checklist_items    = checklist.rows;
     report.issue_observations = issues.rows;
     report.mandatory_spares   = spares.rows;
-
     const pdfBuffer = await generatePdfBuffer(report);
     res.set({
       'Content-Type':        'application/pdf',
@@ -962,12 +955,11 @@ const updateReportStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     if (!status) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'status is required.', { field: 'status' });
-    if (!isValidReportStatus(status)) return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS, 'Invalid status. Allowed values: Approved, Rejected.', { field: 'status' });
+    if (!isValidReportStatus(status)) return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS, 'Invalid status. Allowed: Approved, Rejected.', { field: 'status' });
     const existCheck = await pool.query('SELECT * FROM reports WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
     if (existCheck.rows[0].status !== 'Pending')
       return sendError(res, 400, ERROR_CODES.REPORT_ALREADY_REVIEWED, `This report has already been ${existCheck.rows[0].status.toLowerCase()}. Only Pending reports can be reviewed.`);
-
     const result = await pool.query(
       `UPDATE reports SET status=$1, approved_by_user_id=$2, approved_at=NOW() WHERE id=$3 RETURNING id, status, approved_by_user_id, approved_at`,
       [status, req.user.id, id]
@@ -998,7 +990,7 @@ const addReportImage = async (req, res) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     for (const img of images) {
       if (!img.file_name || !img.file_url) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'Each image must have file_name and file_url.', { missing_fields: ['file_name', 'file_url'] });
-      if (img.mime_type && !allowed.includes(img.mime_type)) return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE, `Invalid file type "${img.mime_type}". Allowed: ${allowed.join(', ')}.`, { field: 'mime_type', allowed });
+      if (img.mime_type && !allowed.includes(img.mime_type)) return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE, `Invalid file type "${img.mime_type}".`, { field: 'mime_type', allowed });
     }
     const inserted = [];
     for (const img of images) {
