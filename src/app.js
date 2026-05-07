@@ -1,3 +1,7 @@
+// ============================================================
+// src/app.js
+// ============================================================
+
 const express     = require('express');
 const cors        = require('cors');
 const path        = require('path');
@@ -6,18 +10,20 @@ const swaggerSpec  = require('./config/swagger');
 const { sendError } = require('./utils/AppError');
 const ERROR_CODES   = require('./utils/errorCodes');
 
-const authRoutes          = require('./routes/authRoutes');
-const userRoutes          = require('./routes/userRoutes');
-const technicianRoutes    = require('./routes/technicianRoutes');
-const clientRoutes        = require('./routes/clientRoutes');
-const jobRoutes           = require('./routes/jobRoutes');
-const reportRoutes        = require('./routes/reportRoutes');
-const amcRoutes           = require('./routes/amcRoutes');
-const emailRoutes         = require('./routes/emailRoutes');
-const uploadRoutes        = require('./routes/uploadRoutes');
-const dashboardRoutes     = require('./routes/dashboardRoutes');
-const notificationRoutes  = require('./routes/notificationRoutes');
-const activityRoutes      = require('./routes/activityRoutes');
+const authRoutes            = require('./routes/authRoutes');
+const userRoutes            = require('./routes/userRoutes');
+const technicianRoutes      = require('./routes/technicianRoutes');
+const clientRoutes          = require('./routes/clientRoutes');
+const jobRoutes             = require('./routes/jobRoutes');
+const reportRoutes          = require('./routes/reportRoutes');
+const amcRoutes             = require('./routes/amcRoutes');
+const emailRoutes           = require('./routes/emailRoutes');
+const uploadRoutes          = require('./routes/uploadRoutes');
+const dashboardRoutes       = require('./routes/dashboardRoutes');
+const notificationRoutes    = require('./routes/notificationRoutes');
+const activityRoutes        = require('./routes/activityRoutes');
+const myDataRoutes          = require('./routes/myDataRoutes');
+const dataRoutes            = require('./routes/dataRoutes');
 
 const app = express();
 
@@ -27,7 +33,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Serve uploaded files as static assets ───────────────────
-// Files are accessible at: GET /uploads/filename.jpg
 const uploadsDir = path.join(process.cwd(), 'uploads');
 app.use('/uploads', express.static(uploadsDir));
 
@@ -38,24 +43,26 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 // ─── Routes ──────────────────────────────────────────────────
-app.use('/api/auth',           authRoutes);
-app.use('/api/users',          userRoutes);
-app.use('/api/technicians',    technicianRoutes);
-app.use('/api/clients',        clientRoutes);
-app.use('/api/jobs',           jobRoutes);
-app.use('/api/reports',        reportRoutes);
-app.use('/api/amc',            amcRoutes);
-app.use('/api/email-settings', emailRoutes);
-app.use('/api/upload',         uploadRoutes);
-app.use('/api/dashboard',      dashboardRoutes);
-app.use('/api/notifications',  notificationRoutes);
-app.use('/api/activity',       activityRoutes);
+app.use('/api/auth',             authRoutes);
+app.use('/api/users',            userRoutes);
+app.use('/api/technicians',      technicianRoutes);
+app.use('/api/clients',          clientRoutes);
+app.use('/api/jobs',             jobRoutes);
+app.use('/api/reports',          reportRoutes);
+app.use('/api/amc',              amcRoutes);
+app.use('/api/email-settings',   emailRoutes);
+app.use('/api/upload',           uploadRoutes);
+app.use('/api/dashboard',        dashboardRoutes);
+app.use('/api/notifications',    notificationRoutes);
+app.use('/api/activity',         activityRoutes);
+app.use('/api/my-data',          myDataRoutes);
+app.use('/api/data',            dataRoutes);
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.status(200).json({
-    success: true,
-    message: 'VDTI Service Hub API is running',
+    success:   true,
+    message:   'VDTI Service Hub API is running',
     timestamp: new Date(),
   });
 });

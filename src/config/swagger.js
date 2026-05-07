@@ -412,6 +412,129 @@ Use the **Authorize** button (top right) and enter your JWT token as:
           properties: { success: { type: 'boolean', example: true }, message: { type: 'string' } },
         },
 
+        // ── My Data ───────────────────────────────────────────
+        MyDataResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            role:    { type: 'string', enum: ['admin','manager','engineer','technician','labour'] },
+            profile: {
+              type: 'object',
+              properties: {
+                id:           { type: 'string', description: 'UUID' },
+                first_name:   { type: 'string' },
+                last_name:    { type: 'string' },
+                email:        { type: 'string', nullable: true },
+                phone_number: { type: 'string', nullable: true },
+                role:         { type: 'string' },
+                is_active:    { type: 'boolean' },
+                last_login_at:{ type: 'string', format: 'date-time', nullable: true },
+                created_at:   { type: 'string', format: 'date-time' },
+              },
+            },
+            technician_profile: {
+              nullable: true,
+              description: 'Present for technician/engineer/labour roles only. Null if no linked profile.',
+              type: 'object',
+              properties: {
+                id:             { type: 'integer' },
+                name:           { type: 'string' },
+                specialization: { type: 'string' },
+                status:         { type: 'string' },
+                jobs_completed: { type: 'integer' },
+                rating:         { type: 'number' },
+              },
+            },
+            stats: {
+              type: 'object',
+              properties: {
+                jobs: {
+                  type: 'object',
+                  properties: {
+                    total:         { type: 'integer' },
+                    raised:        { type: 'integer' },
+                    assigned:      { type: 'integer' },
+                    in_progress:   { type: 'integer' },
+                    closed:        { type: 'integer' },
+                    open:          { type: 'integer' },
+                    total_revenue: { type: 'number', description: 'Admin/manager only' },
+                  },
+                },
+                reports: {
+                  type: 'object',
+                  properties: {
+                    total:    { type: 'integer' },
+                    pending:  { type: 'integer' },
+                    approved: { type: 'integer' },
+                    rejected: { type: 'integer' },
+                  },
+                },
+                amc: {
+                  type: 'object',
+                  description: 'Admin/manager only',
+                  properties: {
+                    total:         { type: 'integer' },
+                    active:        { type: 'integer' },
+                    expiring_soon: { type: 'integer' },
+                    expired:       { type: 'integer' },
+                  },
+                },
+                technicians: {
+                  type: 'object',
+                  description: 'Admin/manager only',
+                  properties: {
+                    total:    { type: 'integer' },
+                    active:   { type: 'integer' },
+                    on_leave: { type: 'integer' },
+                    inactive: { type: 'integer' },
+                  },
+                },
+                clients: {
+                  type: 'object',
+                  description: 'Admin/manager only',
+                  properties: {
+                    total:  { type: 'integer' },
+                    active: { type: 'integer' },
+                  },
+                },
+              },
+            },
+            recent: {
+              type: 'object',
+              properties: {
+                jobs:    { type: 'array', items: { $ref: '#/components/schemas/JobResponse' } },
+                reports: { type: 'array', items: { $ref: '#/components/schemas/ReportResponse' } },
+                amc: {
+                  type: 'array',
+                  description: 'Admin/manager only',
+                  items: { $ref: '#/components/schemas/AmcResponse' },
+                },
+                activity: {
+                  type: 'array',
+                  description: 'Admin/manager only — last 10 activity log entries',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id:                { type: 'integer' },
+                      type:              { type: 'string' },
+                      action:            { type: 'string' },
+                      entity_type:       { type: 'string' },
+                      entity_id:         { type: 'string' },
+                      performed_by_name: { type: 'string' },
+                      created_at:        { type: 'string', format: 'date-time' },
+                    },
+                  },
+                },
+              },
+            },
+            message: {
+              type: 'string',
+              description: 'Only present when user has no linked technician profile.',
+              example: 'No technician profile is linked to your account yet. Please contact your administrator.',
+            },
+          },
+        },
+
       },
     },
   },
