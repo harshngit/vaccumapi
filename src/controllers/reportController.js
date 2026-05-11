@@ -426,9 +426,7 @@ const generatePdfBuffer = (report) => {
          .text('Note : Client is obliged to maintain the above points.', L, y);
 
       // ────────────────────────────────────────────────────────
-      // PAGE 2: ISSUE OBSERVATION MATRIX
-      // Shows ALL rows. Selected ones get tick ✓.
-      // Fixed column layout: severity always fits on one line.
+      // HELPER: draw one issue group's rows onto the current page
       // ────────────────────────────────────────────────────────
       const selectedSet = new Set();
       (report.issue_observations || []).forEach(obs => {
@@ -436,36 +434,18 @@ const generatePdfBuffer = (report) => {
           selectedSet.add(`${obs.issue}||${obs.observation}`);
       });
 
-      doc.addPage();
-      y = drawPageHeader();
+      const measure = (text, w) =>
+        doc.heightOfString(text || '', { width: w, fontSize: 8 });
 
-      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
-         .text('Detailed Issue - Observation - Impact Matrix', L, y, { width: PW, align: 'center' });
-      y += 16;
-
-      y = drawIssueHeader(y);
-
-      MASTER_ISSUE_DATA.forEach(issueGroup => {
+      const drawIssueGroup = (issueGroup, yStart) => {
+        let y = yStart;
         issueGroup.rows.forEach((row, rowIdx) => {
           const isSelected = selectedSet.has(`${issueGroup.issue}||${row.observation}`);
-
-          // ── Calculate row height accurately ──────────────────
-          // Measure each cell's text height at font size 8 — take the max
-          const measure = (text, w) =>
-            doc.heightOfString(text || '', { width: w, fontSize: 8 });
 
           const hObs    = measure(row.observation,        IC.obs - 6);
           const hImpact = measure(row.impact_on_pump,     IC.impact - 6);
           const hSpares = measure(row.recommended_spares, IC.spares - 6);
-          // severity is always "Med" or "High" — one word, never wraps in IC.sev=32
-          const hSev    = 10;
-          const rowH    = Math.max(hObs, hImpact, hSpares, hSev, 16) + 10;
-
-          if (y + rowH > 780) {
-            doc.addPage();
-            y = drawPageHeader();
-            y = drawIssueHeader(y);
-          }
+          const rowH    = Math.max(hObs, hImpact, hSpares, 10, 16) + 10;
 
           // Row border + internal vertical dividers
           border(L, y, PW, rowH);
@@ -478,7 +458,7 @@ const generatePdfBuffer = (report) => {
 
           const ty = y + 5;
 
-          // Tick column — draw a small checkbox with tick if selected
+          // Tick column — small checkbox, ticked if selected
           const cbS = 7;
           const cbX = IX.tick + 2;
           const cbY = ty + 2;
@@ -500,18 +480,17 @@ const generatePdfBuffer = (report) => {
                .text(String(issueGroup.sr), IX.sr + 3, ty, { width: IC.sr - 6, lineBreak: false });
           }
 
-          // Issue — only on first row of group
+          // Issue label — only on first row of group
           if (rowIdx === 0) {
             doc.fontSize(8).fillColor(BLK).font('Helvetica')
                .text(issueGroup.issue, IX.issue + 3, ty, { width: IC.issue - 6 });
           }
 
-          // Observation, Impact, Severity, Spares — all rows
+          // Observation, Impact, Severity, Spares
           doc.fontSize(8).fillColor(BLK).font('Helvetica')
              .text(row.observation     || '', IX.obs    + 3, ty, { width: IC.obs - 6 })
              .text(row.impact_on_pump  || '', IX.impact + 3, ty, { width: IC.impact - 6 });
 
-          // Severity — single word, fits in IC.sev=32 at font size 8
           doc.fontSize(8).fillColor(BLK).font('Helvetica')
              .text(row.severity || '', IX.sev + 2, ty, { width: IC.sev - 4, lineBreak: false });
 
@@ -520,9 +499,46 @@ const generatePdfBuffer = (report) => {
 
           y += rowH;
         });
+        return y;
+      };
+
+      // ────────────────────────────────────────────────────────
+      // PAGE 2: SR 1 (Low Vacuum) + SR 2 (Abnormal Sound)
+      // ────────────────────────────────────────────────────────
+      doc.addPage();
+      y = drawPageHeader();
+
+      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
+         .text('Detailed Issue - Observation - Impact Matrix', L, y, { width: PW, align: 'center' });
+      y += 16;
+
+      y = drawIssueHeader(y);
+
+      // SR 1 & SR 2 — first two issue groups
+      const page2Groups = MASTER_ISSUE_DATA.slice(0, 2);
+      page2Groups.forEach(issueGroup => {
+        y = drawIssueGroup(issueGroup, y);
       });
 
-      // ── Remarks section — writing lines ─────────────────────
+      // ────────────────────────────────────────────────────────
+      // PAGE 3: SR 3 (Excessive Oil) + SR 4 (No Lubrication) + Remarks
+      // ────────────────────────────────────────────────────────
+      doc.addPage();
+      y = drawPageHeader();
+
+      doc.fontSize(11).fillColor(BLK).font('Helvetica-Bold')
+         .text('Detailed Issue - Observation - Impact Matrix', L, y, { width: PW, align: 'center' });
+      y += 16;
+
+      y = drawIssueHeader(y);
+
+      // SR 3 & SR 4 — last two issue groups
+      const page3Groups = MASTER_ISSUE_DATA.slice(2);
+      page3Groups.forEach(issueGroup => {
+        y = drawIssueGroup(issueGroup, y);
+      });
+
+      // ── Remarks section below the table on page 3 ───────────
       y += 20;
       if (y + 60 > 780) { doc.addPage(); y = drawPageHeader(); }
 
