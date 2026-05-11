@@ -226,11 +226,21 @@ const generatePdfBuffer = (report) => {
       const vline = (x, y1, y2, lw = 0.5) =>
         doc.moveTo(x, y1).lineTo(x, y2).strokeColor(BLK).lineWidth(lw).stroke();
 
-      // Real checkbox: empty square or filled black square
+      // Real checkbox: empty square with tick mark ✓ when selected
       const checkbox = (x, y, filled) => {
-        const S = 7;
+        const S = 8;
         doc.rect(x, y, S, S).strokeColor(BLK).lineWidth(0.6).stroke();
-        if (filled) doc.rect(x + 1, y + 1, S - 2, S - 2).fillColor(BLK).fill();
+        if (filled) {
+          // Draw a tick mark inside the box
+          doc.save()
+             .strokeColor(BLK)
+             .lineWidth(1.2)
+             .moveTo(x + 1.5, y + 4)
+             .lineTo(x + 3,   y + 6.5)
+             .lineTo(x + 6.5, y + 1.5)
+             .stroke()
+             .restore();
+        }
       };
 
       // ── Page header ──────────────────────────────────────────
@@ -468,10 +478,20 @@ const generatePdfBuffer = (report) => {
 
           const ty = y + 5;
 
-          // Tick column — ✓ if selected
+          // Tick column — draw a small checkbox with tick if selected
+          const cbS = 7;
+          const cbX = IX.tick + 2;
+          const cbY = ty + 2;
+          doc.rect(cbX, cbY, cbS, cbS).strokeColor(BLK).lineWidth(0.6).stroke();
           if (isSelected) {
-            doc.fontSize(10).fillColor(BLK).font('Helvetica-Bold')
-               .text("'", IX.tick + 2, ty, { width: TICK_W - 4, lineBreak: false });
+            doc.save()
+               .strokeColor(BLK)
+               .lineWidth(1.2)
+               .moveTo(cbX + 1.2, cbY + 3.5)
+               .lineTo(cbX + 2.8, cbY + 5.5)
+               .lineTo(cbX + 5.8, cbY + 1.2)
+               .stroke()
+               .restore();
           }
 
           // SR — only on first row of group
