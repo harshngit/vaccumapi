@@ -19,12 +19,12 @@ Use the **Authorize** button (top right) and enter your JWT token as:
 2. Use that \`file_url\` in **POST /api/jobs/:id/images** or **POST /api/reports/:id/images**
 
 ### Base URLs
-- **Production:** https://vaccumapi-production.up.railway.app
+- **Production:** https://vaccumapi-o4ol.onrender.com/
 - **Local:** http://localhost:3000
       `,
     },
     servers: [
-      { url: 'https://vaccumapi.onrender.com/', description: '🚀 Production (Render)' },
+      { url: 'https://vaccumapi-o4ol.onrender.com/', description: '🚀 Production (Render)' },
       { url: 'http://localhost:3000',                        description: '💻 Local Dev' },
     ],
     components: {
