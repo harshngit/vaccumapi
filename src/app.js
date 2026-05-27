@@ -24,6 +24,7 @@ const notificationRoutes    = require('./routes/notificationRoutes');
 const activityRoutes        = require('./routes/activityRoutes');
 const myDataRoutes          = require('./routes/myDataRoutes');
 const dataRoutes            = require('./routes/dataRoutes');
+const erpRoutes             = require('./routes/erpRoutes');
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/notifications',    notificationRoutes);
 app.use('/api/activity',         activityRoutes);
 app.use('/api/my-data',          myDataRoutes);
 app.use('/api/data',            dataRoutes);
+app.use('/api/erp',              erpRoutes);
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {
