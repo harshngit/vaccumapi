@@ -3,7 +3,7 @@
 -- Migration: Add AMC Service Report PDF fields to reports table
 --            and create 3 new child tables for structured data
 -- Run ONCE on your existing database (after 003_reports_amc_updates.sql)
--- ============================================================
+-- ============================================================     
 
 -- ─── 1. Add new columns to reports table ─────────────────────
 --     Maps to PDF Page 1 (client info block) + Page 3 (remarks)

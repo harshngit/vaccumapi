@@ -535,6 +535,123 @@ Use the **Authorize** button (top right) and enter your JWT token as:
           },
         },
 
+        // ── Attendance ────────────────────────────────────────
+        AttendanceRecord: {
+          type: 'object',
+          properties: {
+            id:             { type: 'integer' },
+            employee_id:    { type: 'string', example: 'EMP-001' },
+            name:           { type: 'string', example: 'Rushikesh Baikar' },
+            date:           { type: 'string', format: 'date', example: '2025-06-15' },
+            check_in:       { type: 'string', format: 'date-time', nullable: true },
+            check_out:      { type: 'string', format: 'date-time', nullable: true },
+            status:         { type: 'string', enum: ['present','absent','half_day','on_leave','holiday'] },
+            working_hours:  { type: 'number', example: 9.0 },
+            source:         { type: 'string', enum: ['razorpayx','manual'] },
+            synced_at:      { type: 'string', format: 'date-time' },
+            user_name:      { type: 'string', nullable: true },
+            specialization: { type: 'string', nullable: true },
+          },
+        },
+        AttendanceEmployee: {
+          type: 'object',
+          properties: {
+            employee_id:    { type: 'string', example: 'EMP-001' },
+            name:           { type: 'string', example: 'Rushikesh Baikar' },
+            email:          { type: 'string', nullable: true },
+            user_id:        { type: 'integer', nullable: true },
+            technician_id:  { type: 'integer', nullable: true },
+            is_active:      { type: 'boolean' },
+            last_synced_at: { type: 'string', format: 'date-time' },
+          },
+        },
+        AttendanceSyncRequest: {
+          type: 'object', required: ['from_date', 'to_date'],
+          properties: {
+            from_date: { type: 'string', format: 'date', example: '2025-06-01' },
+            to_date:   { type: 'string', format: 'date', example: '2025-06-30' },
+          },
+        },
+        AttendanceMarkRequest: {
+          type: 'object', required: ['employee_id', 'date', 'status'],
+          properties: {
+            employee_id: { type: 'string', example: 'EMP-001' },
+            date:        { type: 'string', format: 'date', example: '2025-06-15' },
+            check_in:    { type: 'string', format: 'date-time', example: '2025-06-15T09:00:00.000Z', nullable: true },
+            check_out:   { type: 'string', format: 'date-time', example: '2025-06-15T18:00:00.000Z', nullable: true },
+            status:      { type: 'string', enum: ['present','absent','half_day','on_leave','holiday'], example: 'present' },
+          },
+        },
+        AttendanceSyncEmployeesResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Employee list synced. 20 employees updated.' },
+            total:   { type: 'integer', example: 20 },
+          },
+        },
+        AttendanceSyncResponse: {
+          type: 'object',
+          properties: {
+            success:         { type: 'boolean', example: true },
+            message:         { type: 'string', example: 'Attendance sync complete.' },
+            records_synced:  { type: 'integer', example: 480 },
+            errors_count:    { type: 'integer', example: 0 },
+            errors:          { type: 'array', nullable: true, items: { type: 'object', properties: { employee_id: { type: 'string' }, error: { type: 'string' } } } },
+          },
+        },
+        AttendanceEmployeeListResponse: {
+          type: 'object',
+          properties: {
+            success:   { type: 'boolean', example: true },
+            total:     { type: 'integer', example: 20 },
+            employees: { type: 'array', items: { $ref: '#/components/schemas/AttendanceEmployee' } },
+          },
+        },
+        AttendanceListResponse: {
+          type: 'object',
+          properties: {
+            success:     { type: 'boolean', example: true },
+            total:       { type: 'integer' },
+            page:        { type: 'integer' },
+            limit:       { type: 'integer' },
+            total_pages: { type: 'integer' },
+            attendance:  { type: 'array', items: { $ref: '#/components/schemas/AttendanceRecord' } },
+          },
+        },
+        AttendanceSummaryRecord: {
+          type: 'object',
+          properties: {
+            employee_id:  { type: 'string' },
+            name:         { type: 'string' },
+            total_days:   { type: 'integer' },
+            present:      { type: 'integer' },
+            absent:       { type: 'integer' },
+            half_day:     { type: 'integer' },
+            on_leave:     { type: 'integer' },
+            holidays:     { type: 'integer' },
+            avg_hours:    { type: 'number' },
+            total_hours:  { type: 'number' },
+          },
+        },
+        AttendanceSummaryResponse: {
+          type: 'object',
+          properties: {
+            success:   { type: 'boolean', example: true },
+            from_date: { type: 'string', format: 'date', nullable: true },
+            to_date:   { type: 'string', format: 'date', nullable: true },
+            summary:   { type: 'array', items: { $ref: '#/components/schemas/AttendanceSummaryRecord' } },
+          },
+        },
+        AttendanceMarkResponse: {
+          type: 'object',
+          properties: {
+            success:    { type: 'boolean', example: true },
+            message:    { type: 'string', example: 'Attendance marked successfully.' },
+            attendance: { $ref: '#/components/schemas/AttendanceRecord' },
+          },
+        },
+
       },
     },
   },
