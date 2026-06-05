@@ -10,6 +10,45 @@ const ERROR_CODES   = require('../utils/errorCodes');
 const RPX_API_ID     = process.env.RAZORPAYX_API_ID;
 const RPX_API_KEY    = process.env.RAZORPAYX_API_KEY;
 const RPX_PEOPLE_URL = 'https://payroll.razorpay.com/api/people';
+const RPX_ATT_URL    = 'https://payroll.razorpay.com/api/att';
+
+// ─── Helper: generic RazorpayX POST (accepts URL) ────────────
+async function razorpayxPost(url, type, subType, data = {}) {
+  const payload = {
+    auth:    { id: parseInt(RPX_API_ID, 10) || RPX_API_ID, key: RPX_API_KEY },
+    request: { type, 'sub-type': subType },
+    data,
+  };
+
+  console.log(`[RazorpayX] → ${url} | type: ${type} | sub-type: ${subType}`);
+
+  const resp = await fetch(url, {
+    method:  'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-id':     RPX_API_ID,
+      'x-api-key':    RPX_API_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await resp.text();
+
+  if (text.trim().startsWith('<')) {
+    throw new Error('RazorpayX returned HTML. Verify RAZORPAYX_API_ID and RAZORPAYX_API_KEY in .env');
+  }
+
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw new Error('RazorpayX returned unexpected response format'); }
+
+  if (!resp.ok) {
+    console.error('[RazorpayX] Error response:', json);
+    throw new Error(json.message || json.error || `RazorpayX error (HTTP ${resp.status})`);
+  }
+
+  return json;
+}
 
 // ─── Helper: POST to RazorpayX /api/people ───────────────────
 async function razorpayxPeoplePost(type, subType, data = {}) {
@@ -420,6 +459,52 @@ const getStoredEmployee = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// GET /api/attendance/fetch
+// Fetch attendance for a specific date from RazorpayX /api/att
+// Query params: email (required), date (required YYYY-MM-DD),
+//               employee_type (optional, default "employee")
+// ────────────────────────────────────────────────────────────
+const fetchAttendanceByDate = async (req, res) => {
+  try {
+    const { email, date, employee_type = 'employee' } = req.query;
+
+    if (!email) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        '"email" query parameter is required.');
+    }
+
+    if (!date) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        '"date" query parameter is required (format: YYYY-MM-DD, e.g. 2020-12-15).');
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return sendError(res, 400, 'INVALID_DATE_FORMAT',
+        '"date" must be in YYYY-MM-DD format (e.g. 2020-12-15).');
+    }
+
+    console.log(`[Attendance] Fetching attendance for ${email} on ${date}`);
+
+    const data = await razorpayxPost(RPX_ATT_URL, 'attendance', 'fetch', {
+      email,
+      'employee-type': employee_type,
+      date,
+    });
+
+    return res.status(200).json({
+      success:    true,
+      email,
+      date,
+      attendance: data,
+    });
+
+  } catch (error) {
+    console.error('[Attendance] fetchAttendanceByDate error:', error.message);
+    return sendError(res, 502, 'RAZORPAYX_ERROR', error.message);
+  }
+};
+
 module.exports = {
   viewEmployeeFromPeople,
   storeEmployee,
@@ -427,4 +512,5 @@ module.exports = {
   setEmployeeSalary,
   getAllStoredEmployees,
   getStoredEmployee,
+  fetchAttendanceByDate,
 };

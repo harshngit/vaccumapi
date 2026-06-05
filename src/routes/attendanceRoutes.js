@@ -11,6 +11,7 @@ const {
   setEmployeeSalary,
   getAllStoredEmployees,
   getStoredEmployee,
+  fetchAttendanceByDate,
 } = require('../controllers/attendanceController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -49,6 +50,42 @@ router.use(protect);
  *       400: { description: Invalid employee_id }
  *       502: { description: RazorpayX API error }
  */
+/**
+ * @swagger
+ * /api/attendance/fetch:
+ *   get:
+ *     summary: Fetch attendance for a specific date from RazorpayX
+ *     description: |
+ *       Calls `https://payroll.razorpay.com/api/att` with `sub-type: fetch`.
+ *       Returns the attendance record for the given employee email and date.
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: email
+ *         required: true
+ *         schema: { type: string, example: "rbaikar06@gmail.com" }
+ *         description: Employee email address
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, example: "2020-12-15" }
+ *         description: Date in YYYY-MM-DD format
+ *       - in: query
+ *         name: employee_type
+ *         schema: { type: string, default: "employee", example: "employee" }
+ *         description: RazorpayX employee type
+ *     responses:
+ *       200:
+ *         description: Attendance record for the given date
+ *       400:
+ *         description: Missing or invalid email / date
+ *       502:
+ *         description: RazorpayX API error
+ */
+router.get('/fetch', authorize('admin', 'manager'), fetchAttendanceByDate);
+
 router.get('/people/view/:employee_id', authorize('admin'), viewEmployeeFromPeople);
 
 /**
