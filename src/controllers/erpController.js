@@ -4,6 +4,7 @@
 // ============================================================
 
 const { Errors } = require('../utils/AppError');
+const pool = require('../config/db');
 
 const ERP_BASE_URL = process.env.ERP_BASE_URL || 'http://203.192.195.67/erp';
 const ERP_API_KEY  = process.env.ERP_API_KEY  || '';   // set in .env if required
@@ -48,6 +49,95 @@ async function fetchFromERP(endpoint, params = {}) {
   // Fall back: return raw text wrapped in an object so callers stay consistent
   const text = await response.text();
   return { raw: text };
+}
+
+// ─── ERP → local clients mirror helper ────────────────────────
+/**
+ * Map a single ERP customer record to local `clients` columns.
+ * Returns null if it can't be mirrored (missing CustId or CustName).
+ */
+function mapErpCustomer(rec) {
+  if (!rec || typeof rec !== 'object') return null;
+
+  const custId = rec.CustId ?? rec.custId ?? rec.cust_id;
+  const name   = (rec.CustName ?? rec.custName ?? '').toString().trim();
+  if (custId === undefined || custId === null || custId === '' || !name) return null;
+
+  const address = [rec.CustAdd, rec.CustAdd1, rec.CustAdd2, rec.PinCode, rec.StateCode]
+    .map((p) => (p === null || p === undefined ? '' : String(p).trim()))
+    .filter(Boolean)
+    .join(', ') || null;
+
+  return {
+    erp_customer_id: custId,
+    erp_cust_code:   rec.CustCode ? String(rec.CustCode).trim() : null,
+    name,
+    contact_person:  name, // ERP has no separate person field
+    email:           rec.EmailId ? String(rec.EmailId).toLowerCase().trim() : null,
+    phone:           rec.ContactNo ? String(rec.ContactNo).trim() : null,
+    address,
+  };
+}
+
+/**
+ * Bulk-upsert ERP customer records into the local `clients` table and
+ * return a Map of erp_customer_id -> local clients.id.
+ *
+ * Never throws: if the DB is unavailable the ERP proxy must still work,
+ * so on any error it logs and returns an empty Map.
+ */
+async function syncErpCustomersToLocal(records) {
+  const map = new Map();
+  const rows = (Array.isArray(records) ? records : [records])
+    .map(mapErpCustomer)
+    .filter(Boolean);
+
+  if (rows.length === 0) return map;
+
+  try {
+    // Build one parameterised bulk INSERT ... ON CONFLICT statement
+    const cols = 7; // name, contact_person, email, phone, address, erp_customer_id, erp_cust_code
+    const valuesSql = rows.map((_, i) => {
+      const b = i * cols;
+      return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, 'Corporate', 'Active', 0, CURRENT_DATE, 'erp', $${b + 6}, $${b + 7})`;
+    }).join(', ');
+
+    const params = [];
+    rows.forEach((r) => {
+      params.push(r.name, r.contact_person, r.email, r.phone, r.address, r.erp_customer_id, r.erp_cust_code);
+    });
+
+    const result = await pool.query(
+      `INSERT INTO clients
+         (name, contact_person, email, phone, address, type, status,
+          contract_value, join_date, origin, erp_customer_id, erp_cust_code)
+       VALUES ${valuesSql}
+       ON CONFLICT (erp_customer_id) WHERE erp_customer_id IS NOT NULL
+       DO UPDATE SET
+         name           = EXCLUDED.name,
+         contact_person = EXCLUDED.contact_person,
+         email          = EXCLUDED.email,
+         phone          = EXCLUDED.phone,
+         address        = EXCLUDED.address,
+         erp_cust_code  = EXCLUDED.erp_cust_code,
+         origin         = 'erp'
+       RETURNING id, erp_customer_id`,
+      params
+    );
+
+    result.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
+  } catch (error) {
+    console.error('ERP customer mirror error (proxy will still return ERP data):', error.message);
+  }
+
+  return map;
+}
+
+/** Attach local_client_id to an ERP record using the synced id map. */
+function attachLocalId(rec, idMap) {
+  if (!rec || typeof rec !== 'object') return rec;
+  const custId = rec.CustId ?? rec.custId ?? rec.cust_id;
+  return { ...rec, local_client_id: idMap.get(String(custId)) ?? null };
 }
 
 // ─── GET /api/erp/quotations ──────────────────────────────────
@@ -202,11 +292,16 @@ const getCustomers = async (req, res) => {
       ? erpData
       : erpData.data ?? erpData.customers ?? erpData.records ?? (erpData.raw ? [] : [erpData]);
 
+    // Auto-mirror these ERP customers into local clients and tag each
+    // record with its local_client_id (used as client_id for AMC).
+    const idMap = await syncErpCustomersToLocal(records);
+    const data  = records.map((r) => attachLocalId(r, idMap));
+
     return res.status(200).json({
       success : true,
       source  : 'erp',
-      count   : records.length,
-      data    : records,
+      count   : data.length,
+      data,
       ...(erpData.pagination   && { pagination  : erpData.pagination   }),
       ...(erpData.totalRecords && { totalRecords: erpData.totalRecords }),
       ...(erpData.raw          && { raw         : erpData.raw          }),
@@ -254,10 +349,14 @@ const getCustomerById = async (req, res) => {
       });
     }
 
+    // Auto-mirror into local clients and tag with local_client_id
+    const idMap = await syncErpCustomersToLocal([record]);
+    const data  = attachLocalId(record, idMap);
+
     return res.status(200).json({
       success : true,
       source  : 'erp',
-      data    : record,
+      data,
     });
   } catch (error) {
     console.error('ERP Customer by ID fetch error:', error.message);
@@ -287,4 +386,8 @@ module.exports = {
   getQuotationById,
   getCustomers,
   getCustomerById,
+  // exported for reuse by the combined directory endpoints
+  fetchFromERP,
+  syncErpCustomersToLocal,
+  attachLocalId,
 };

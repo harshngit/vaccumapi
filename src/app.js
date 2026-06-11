@@ -25,6 +25,7 @@ const activityRoutes        = require('./routes/activityRoutes');
 const myDataRoutes          = require('./routes/myDataRoutes');
 const dataRoutes            = require('./routes/dataRoutes');
 const erpRoutes             = require('./routes/erpRoutes');
+const directoryRoutes       = require('./routes/directoryRoutes'); // combined local + ERP
 const attendanceRoutes      = require('./routes/attendanceRoutes'); // ✅ NEW
 
 const app = express();
@@ -60,6 +61,7 @@ app.use('/api/activity',         activityRoutes);
 app.use('/api/my-data',          myDataRoutes);
 app.use('/api/data',             dataRoutes);
 app.use('/api/erp',              erpRoutes);
+app.use('/api/directory',        directoryRoutes);
 app.use('/api/attendance',       attendanceRoutes); // ✅ NEW
 
 // ─── Health Check ────────────────────────────────────────────
