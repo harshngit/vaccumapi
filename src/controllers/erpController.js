@@ -68,13 +68,17 @@ function mapErpCustomer(rec) {
     .filter(Boolean)
     .join(', ') || null;
 
+  // Clamp to the clients table column limits so a single oversize value
+  // cannot abort the whole batch insert.
+  const clamp = (v, n) => (v === null || v === undefined ? null : String(v).slice(0, n));
+
   return {
     erp_customer_id: custId,
-    erp_cust_code:   rec.CustCode ? String(rec.CustCode).trim() : null,
-    name,
-    contact_person:  name, // ERP has no separate person field
-    email:           rec.EmailId ? String(rec.EmailId).toLowerCase().trim() : null,
-    phone:           rec.ContactNo ? String(rec.ContactNo).trim() : null,
+    erp_cust_code:   clamp(rec.CustCode ? String(rec.CustCode).trim() : null, 50),
+    name:            clamp(name, 200),
+    contact_person:  clamp(name, 200), // ERP has no separate person field
+    email:           clamp(rec.EmailId ? String(rec.EmailId).toLowerCase().trim() : null, 255),
+    phone:           clamp(rec.ContactNo ? String(rec.ContactNo).trim() : null, 50),
     address,
   };
 }
@@ -95,6 +99,15 @@ async function ensureErpColumns() {
        ADD COLUMN IF NOT EXISTS erp_customer_id BIGINT,
        ADD COLUMN IF NOT EXISTS erp_cust_code   VARCHAR(50)`
   );
+  // Widen columns that are too small for some ERP values. A single value
+  // longer than the column limit in a 300+ row batch would otherwise abort
+  // the whole insert and leave every record with a null id.
+  try {
+    await pool.query(`ALTER TABLE clients ALTER COLUMN phone TYPE VARCHAR(50)`);
+    await pool.query(`ALTER TABLE clients ALTER COLUMN contact_person TYPE VARCHAR(200)`);
+  } catch (e) {
+    console.error('ensureErpColumns: widen skipped:', e.message);
+  }
   // Best-effort unique index. The mirror does NOT depend on it, so if it
   // can't be created we simply carry on.
   try {
@@ -169,8 +182,28 @@ async function syncErpCustomersToLocal(records) {
         );
         inserted.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
       } catch (insErr) {
-        // e.g. a concurrent request inserted the same CustId first.
-        console.error('ERP mirror insert warning:', insErr.message);
+        // The bulk insert failed (one bad row aborts the whole statement).
+        // Fall back to inserting each new row on its own so a single bad
+        // record can't block all the others.
+        errMsg = insErr.message;
+        console.error('ERP mirror bulk insert failed, retrying row-by-row:', insErr.message);
+
+        for (const r of newRows) {
+          if (map.has(String(r.erp_customer_id))) continue;
+          try {
+            const one = await pool.query(
+              `INSERT INTO clients
+                 (name, contact_person, email, phone, address, type, status,
+                  contract_value, join_date, origin, erp_customer_id, erp_cust_code)
+               VALUES ($1,$2,$3,$4,$5,'Corporate','Active',0,CURRENT_DATE,'erp',$6,$7)
+               RETURNING id, erp_customer_id`,
+              [r.name, r.contact_person, r.email, r.phone, r.address, r.erp_customer_id, r.erp_cust_code]
+            );
+            map.set(String(one.rows[0].erp_customer_id), one.rows[0].id);
+          } catch (rowErr) {
+            console.error(`ERP mirror skip CustId ${r.erp_customer_id}:`, rowErr.message);
+          }
+        }
       }
 
       // 3. Fill any ids still missing (covers races / partial insert)
