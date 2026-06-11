@@ -100,13 +100,15 @@ const getDirectory = async (req, res) => {
     // 2. ERP customers (live) — mirror + tag with local_client_id
     let erpItems = [];
     let erpAvailable = true;
+    let mirrorError = null;
     try {
       const erpData = await fetchFromERP('CustomerAPI.ashx', { search, status });
       const records = Array.isArray(erpData)
         ? erpData
         : erpData.data ?? erpData.customers ?? erpData.records ?? (erpData.raw ? [] : [erpData]);
 
-      const idMap = await syncErpCustomersToLocal(records);
+      const { idMap, error } = await syncErpCustomersToLocal(records);
+      mirrorError = error;
       erpItems = records
         .map((r) => attachLocalId(r, idMap))
         .map(fromErp);
@@ -121,6 +123,7 @@ const getDirectory = async (req, res) => {
     return res.status(200).json({
       success:       true,
       erp_available: erpAvailable,
+      ...(mirrorError && { mirror_error: mirrorError }), // shown only if the local-mirror upsert failed
       counts: {
         local: localItems.length,
         erp:   erpItems.length,
@@ -160,7 +163,7 @@ const getDirectoryById = async (req, res) => {
         });
       }
 
-      const idMap = await syncErpCustomersToLocal([record]);
+      const { idMap } = await syncErpCustomersToLocal([record]);
       const data  = fromErp(attachLocalId(record, idMap));
 
       return res.status(200).json({ success: true, source: 'erp', data });

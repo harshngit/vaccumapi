@@ -99,8 +99,9 @@ async function syncErpCustomersToLocal(records) {
   mapped.forEach((r) => byId.set(String(r.erp_customer_id), r));
   const rows = [...byId.values()];
 
-  if (rows.length === 0) return map;
+  if (rows.length === 0) return { idMap: map, error: null };
 
+  let errMsg = null;
   try {
     // Build one parameterised bulk INSERT ... ON CONFLICT statement
     const cols = 7; // name, contact_person, email, phone, address, erp_customer_id, erp_cust_code
@@ -134,10 +135,11 @@ async function syncErpCustomersToLocal(records) {
 
     result.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
   } catch (error) {
+    errMsg = error.message;
     console.error('ERP customer mirror error (proxy will still return ERP data):', error.message);
   }
 
-  return map;
+  return { idMap: map, error: errMsg };
 }
 
 /** Attach local_client_id to an ERP record using the synced id map. */
@@ -301,7 +303,7 @@ const getCustomers = async (req, res) => {
 
     // Auto-mirror these ERP customers into local clients and tag each
     // record with its local_client_id (used as client_id for AMC).
-    const idMap = await syncErpCustomersToLocal(records);
+    const { idMap } = await syncErpCustomersToLocal(records);
     const data  = records.map((r) => attachLocalId(r, idMap));
 
     return res.status(200).json({
@@ -357,7 +359,7 @@ const getCustomerById = async (req, res) => {
     }
 
     // Auto-mirror into local clients and tag with local_client_id
-    const idMap = await syncErpCustomersToLocal([record]);
+    const { idMap } = await syncErpCustomersToLocal([record]);
     const data  = attachLocalId(record, idMap);
 
     return res.status(200).json({
