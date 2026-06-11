@@ -10,6 +10,8 @@ const {
   getClientById,
   updateClient,
   deleteClient,
+  linkErpClient,
+  bulkImportErpClients,
 } = require('../controllers/clientController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -101,6 +103,76 @@ router.get('/', protect, getClients);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', protect, authorize('admin', 'manager', 'engineer'), createClient);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/clients/from-erp:
+ *   post:
+ *     summary: Link (mirror) an ERP customer into local clients
+ *     description: |
+ *       Takes an ERP customer object and creates — or refreshes — a local
+ *       mirror in the `clients` table, returning its local `id`. Use that
+ *       `id` as `client_id` when creating an AMC contract.
+ *       If the ERP customer (by CustId) was linked before, the existing
+ *       local client is refreshed and returned instead of duplicating it.
+ *     tags: [Clients]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [CustId, CustName]
+ *             properties:
+ *               CustId:    { type: integer, example: 90 }
+ *               CustCode:  { type: string,  example: B59 }
+ *               CustName:  { type: string,  example: Deccan fine chemicals India Pvt Ltd }
+ *               CustAdd:   { type: string,  example: Kesavaram(Village), }
+ *               CustAdd1:  { type: string, nullable: true }
+ *               CustAdd2:  { type: string, nullable: true }
+ *               ContactNo: { type: string,  example: +91-4067111102 }
+ *               EmailId:   { type: string,  example: mohanchand@deccanchemicals.com }
+ *               PinCode:   { type: string,  example: "531127" }
+ *               StateCode: { type: string,  example: 37 ANDHRA PRADESH }
+ *     responses:
+ *       200:
+ *         description: ERP customer was already linked; existing client returned
+ *       201:
+ *         description: ERP customer linked; new local client created
+ *       400:
+ *         description: Missing CustId or CustName
+ */
+router.post('/from-erp', protect, authorize('admin', 'manager', 'engineer'), linkErpClient);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/clients/import-erp:
+ *   post:
+ *     summary: Bulk import ALL ERP customers into local clients
+ *     description: |
+ *       One-shot import. Fetches every customer from the ERP CustomerAPI and
+ *       mirrors them into the local `clients` table automatically. New ERP
+ *       customers are created; ones already mirrored (matched on CustId) are
+ *       left as-is. No request body needed.
+ *
+ *       Returns a summary and a mapping of each `erp_customer_id` to its local
+ *       `client_id` (use that id as `client_id` when creating an AMC).
+ *     tags: [Clients]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Import complete (summary + erp_customer_id -> client_id mapping)
+ *       502:
+ *         description: Could not reach the ERP
+ */
+router.post('/import-erp', protect, authorize('admin', 'manager'), bulkImportErpClients);
 
 // ────────────────────────────────────────────────────────────
 
