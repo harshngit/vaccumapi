@@ -67,7 +67,6 @@ function fromErp(rec) {
     join_date:       null,
     created_at:      null,
     updated_at:      null,
-    erp_raw:         rec, // keep the original ERP fields too
   };
 }
 

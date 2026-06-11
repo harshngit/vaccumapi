@@ -88,9 +88,16 @@ function mapErpCustomer(rec) {
  */
 async function syncErpCustomersToLocal(records) {
   const map = new Map();
-  const rows = (Array.isArray(records) ? records : [records])
+  const mapped = (Array.isArray(records) ? records : [records])
     .map(mapErpCustomer)
     .filter(Boolean);
+
+  // Dedupe by erp_customer_id — the ERP can return the same CustId more
+  // than once, and ON CONFLICT cannot affect the same row twice in one
+  // statement (that would error out the whole upsert and lose the ids).
+  const byId = new Map();
+  mapped.forEach((r) => byId.set(String(r.erp_customer_id), r));
+  const rows = [...byId.values()];
 
   if (rows.length === 0) return map;
 
