@@ -11,6 +11,7 @@ const {
   fetchFromERP,
   syncErpCustomersToLocal,
   attachLocalId,
+  ensureErpColumns,
 } = require('./erpController');
 
 // ─── Normalisers → one common shape for the frontend ──────────
@@ -86,6 +87,9 @@ const getDirectory = async (req, res) => {
   try {
     const { search, status } = req.query;
 
+    // Make sure the columns exist before we query/select them.
+    await ensureErpColumns();
+
     // 1. Local clients (only true-local ones; erp mirrors come from the ERP side)
     const localResult = await pool.query(
       `SELECT id, name, contact_person, email, phone, gst_no, address, type, status,
@@ -150,6 +154,8 @@ const getDirectoryById = async (req, res) => {
   try {
     const { id } = req.params;
     const source = (req.query.source || 'local').toLowerCase();
+
+    await ensureErpColumns();
 
     if (source === 'erp') {
       const erpData = await fetchFromERP('CustomerAPI.ashx', { id });

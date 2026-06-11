@@ -79,6 +79,35 @@ function mapErpCustomer(rec) {
   };
 }
 
+// One-time guard so the idempotent schema check runs once per process.
+let erpColumnsEnsured = false;
+
+/**
+ * Make sure the columns the mirror needs actually exist. This lets the
+ * feature work even if migration 006 was never applied on the deployed DB.
+ * Every statement is idempotent (IF NOT EXISTS) and safe to re-run.
+ */
+async function ensureErpColumns() {
+  if (erpColumnsEnsured) return;
+  await pool.query(
+    `ALTER TABLE clients
+       ADD COLUMN IF NOT EXISTS origin          VARCHAR(10) NOT NULL DEFAULT 'local',
+       ADD COLUMN IF NOT EXISTS erp_customer_id BIGINT,
+       ADD COLUMN IF NOT EXISTS erp_cust_code   VARCHAR(50)`
+  );
+  // Best-effort unique index. The mirror does NOT depend on it, so if it
+  // can't be created we simply carry on.
+  try {
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS uniq_clients_erp_customer_id
+         ON clients (erp_customer_id) WHERE erp_customer_id IS NOT NULL`
+    );
+  } catch (e) {
+    console.error('ensureErpColumns: index skipped:', e.message);
+  }
+  erpColumnsEnsured = true;
+}
+
 /**
  * Bulk-upsert ERP customer records into the local `clients` table and
  * return a Map of erp_customer_id -> local clients.id.
@@ -103,37 +132,59 @@ async function syncErpCustomersToLocal(records) {
 
   let errMsg = null;
   try {
-    // Build one parameterised bulk INSERT ... ON CONFLICT statement
-    const cols = 7; // name, contact_person, email, phone, address, erp_customer_id, erp_cust_code
-    const valuesSql = rows.map((_, i) => {
-      const b = i * cols;
-      return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, 'Corporate', 'Active', 0, CURRENT_DATE, 'erp', $${b + 6}, $${b + 7})`;
-    }).join(', ');
+    await ensureErpColumns();
 
-    const params = [];
-    rows.forEach((r) => {
-      params.push(r.name, r.contact_person, r.email, r.phone, r.address, r.erp_customer_id, r.erp_cust_code);
-    });
+    const erpIds = rows.map((r) => r.erp_customer_id);
 
-    const result = await pool.query(
-      `INSERT INTO clients
-         (name, contact_person, email, phone, address, type, status,
-          contract_value, join_date, origin, erp_customer_id, erp_cust_code)
-       VALUES ${valuesSql}
-       ON CONFLICT (erp_customer_id) WHERE erp_customer_id IS NOT NULL
-       DO UPDATE SET
-         name           = EXCLUDED.name,
-         contact_person = EXCLUDED.contact_person,
-         email          = EXCLUDED.email,
-         phone          = EXCLUDED.phone,
-         address        = EXCLUDED.address,
-         erp_cust_code  = EXCLUDED.erp_cust_code,
-         origin         = 'erp'
-       RETURNING id, erp_customer_id`,
-      params
+    // 1. Which CustIds already have a local mirror?
+    const existing = await pool.query(
+      `SELECT id, erp_customer_id FROM clients WHERE erp_customer_id = ANY($1::bigint[])`,
+      [erpIds]
     );
+    existing.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
 
-    result.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
+    // 2. Insert only the new ones. Plain INSERT — no ON CONFLICT, so it does
+    //    NOT depend on the unique index existing.
+    const newRows = rows.filter((r) => !map.has(String(r.erp_customer_id)));
+    if (newRows.length > 0) {
+      const cols = 7; // name, contact_person, email, phone, address, erp_customer_id, erp_cust_code
+      const valuesSql = newRows.map((_, i) => {
+        const b = i * cols;
+        return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, 'Corporate', 'Active', 0, CURRENT_DATE, 'erp', $${b + 6}, $${b + 7})`;
+      }).join(', ');
+
+      const params = [];
+      newRows.forEach((r) => {
+        params.push(r.name, r.contact_person, r.email, r.phone, r.address, r.erp_customer_id, r.erp_cust_code);
+      });
+
+      try {
+        const inserted = await pool.query(
+          `INSERT INTO clients
+             (name, contact_person, email, phone, address, type, status,
+              contract_value, join_date, origin, erp_customer_id, erp_cust_code)
+           VALUES ${valuesSql}
+           RETURNING id, erp_customer_id`,
+          params
+        );
+        inserted.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
+      } catch (insErr) {
+        // e.g. a concurrent request inserted the same CustId first.
+        console.error('ERP mirror insert warning:', insErr.message);
+      }
+
+      // 3. Fill any ids still missing (covers races / partial insert)
+      const stillMissing = newRows
+        .filter((r) => !map.has(String(r.erp_customer_id)))
+        .map((r) => r.erp_customer_id);
+      if (stillMissing.length > 0) {
+        const refill = await pool.query(
+          `SELECT id, erp_customer_id FROM clients WHERE erp_customer_id = ANY($1::bigint[])`,
+          [stillMissing]
+        );
+        refill.rows.forEach((row) => map.set(String(row.erp_customer_id), row.id));
+      }
+    }
   } catch (error) {
     errMsg = error.message;
     console.error('ERP customer mirror error (proxy will still return ERP data):', error.message);
@@ -399,4 +450,5 @@ module.exports = {
   fetchFromERP,
   syncErpCustomersToLocal,
   attachLocalId,
+  ensureErpColumns,
 };
