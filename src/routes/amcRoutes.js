@@ -124,6 +124,26 @@ router.get('/', protect, getAmcContracts);
  *                 type: integer
  *                 default: 30
  *                 example: 30
+ *               visit_count:
+ *                 type: integer
+ *                 example: 4
+ *                 description: Number of service visits covered by the AMC
+ *               pumps_count:
+ *                 type: integer
+ *                 example: 3
+ *                 description: Number of pumps covered by the AMC
+ *               per_pump_price:
+ *                 type: number
+ *                 example: 25000.00
+ *                 description: Price charged per pump (INR)
+ *               total_price:
+ *                 type: number
+ *                 example: 75000.00
+ *                 description: Total price before GST (INR)
+ *               gst_percent:
+ *                 type: number
+ *                 example: 18
+ *                 description: GST percentage applied to the contract
  *               services:
  *                 type: array
  *                 items: { type: string }
@@ -199,6 +219,21 @@ router.get('/:id', protect, getAmcById);
  *                 format: date
  *               renewal_reminder_days:
  *                 type: integer
+ *               visit_count:
+ *                 type: integer
+ *                 description: Number of service visits covered by the AMC
+ *               pumps_count:
+ *                 type: integer
+ *                 description: Number of pumps covered by the AMC
+ *               per_pump_price:
+ *                 type: number
+ *                 description: Price charged per pump (INR)
+ *               total_price:
+ *                 type: number
+ *                 description: Total price before GST (INR)
+ *               gst_percent:
+ *                 type: number
+ *                 description: GST percentage applied to the contract
  *               services:
  *                 type: array
  *                 items: { type: string }

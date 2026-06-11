@@ -436,6 +436,7 @@ const getAmcContracts = async (req, res) => {
          a.id, a.client_id, c.name AS client_name, c.email AS client_email,
          a.title, a.po_number, a.start_date, a.end_date, a.value,
          a.status, a.next_service_date, a.renewal_reminder_days,
+         a.visit_count, a.pumps_count, a.per_pump_price, a.total_price, a.gst_percent,
          (a.end_date - CURRENT_DATE) AS days_left,
          a.created_by_user_id, a.created_at, a.updated_at
        FROM amc_contracts a
@@ -477,6 +478,7 @@ const createAmcContract = async (req, res) => {
       client_id, title, start_date, end_date, value,
       next_service_date, renewal_reminder_days = 30,
       services = [], po_number,
+      visit_count, pumps_count, per_pump_price, total_price, gst_percent,
     } = req.body;
 
     const missing = [];
@@ -529,14 +531,20 @@ const createAmcContract = async (req, res) => {
     const result = await dbClient.query(
       `INSERT INTO amc_contracts
          (id, client_id, title, start_date, end_date, value, status,
-          next_service_date, renewal_reminder_days, po_number, created_by_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          next_service_date, renewal_reminder_days, po_number, created_by_user_id,
+          visit_count, pumps_count, per_pump_price, total_price, gst_percent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         amcId, client_id, title.trim(), start_date, end_date,
         parseFloat(value), status,
         next_service_date || null, renewal_reminder_days,
         po_number || null, req.user.id,
+        visit_count    !== undefined && visit_count    !== null && visit_count    !== '' ? parseInt(visit_count)      : null,
+        pumps_count    !== undefined && pumps_count    !== null && pumps_count    !== '' ? parseInt(pumps_count)      : null,
+        per_pump_price !== undefined && per_pump_price !== null && per_pump_price !== '' ? parseFloat(per_pump_price) : null,
+        total_price    !== undefined && total_price    !== null && total_price    !== '' ? parseFloat(total_price)    : null,
+        gst_percent    !== undefined && gst_percent    !== null && gst_percent    !== '' ? parseFloat(gst_percent)    : null,
       ]
     );
 
@@ -641,6 +649,7 @@ const getAmcById = async (req, res) => {
          a.id, a.client_id, c.name AS client_name, c.email AS client_email,
          a.title, a.po_number, a.start_date, a.end_date, a.value,
          a.status, a.next_service_date, a.renewal_reminder_days,
+         a.visit_count, a.pumps_count, a.per_pump_price, a.total_price, a.gst_percent,
          (a.end_date - CURRENT_DATE) AS days_left,
          a.created_by_user_id, a.created_at, a.updated_at
        FROM amc_contracts a
@@ -685,6 +694,7 @@ const updateAmcContract = async (req, res) => {
       title, end_date, value,
       next_service_date, renewal_reminder_days,
       services, po_number,
+      visit_count, pumps_count, per_pump_price, total_price, gst_percent,
     } = req.body;
 
     const newTitle           = title                ? title.trim()               : cur.title;
@@ -693,6 +703,13 @@ const updateAmcContract = async (req, res) => {
     const newNextServiceDate = next_service_date    !== undefined ? next_service_date  : cur.next_service_date;
     const newReminderDays    = renewal_reminder_days !== undefined ? renewal_reminder_days : cur.renewal_reminder_days;
     const newPoNumber        = po_number            !== undefined ? po_number           : cur.po_number;
+
+    const numOrNull = (v) => (v === '' || v === null ? null : v);
+    const newVisitCount    = visit_count    !== undefined ? (numOrNull(visit_count)    === null ? null : parseInt(visit_count))      : cur.visit_count;
+    const newPumpsCount    = pumps_count    !== undefined ? (numOrNull(pumps_count)    === null ? null : parseInt(pumps_count))      : cur.pumps_count;
+    const newPerPumpPrice  = per_pump_price !== undefined ? (numOrNull(per_pump_price) === null ? null : parseFloat(per_pump_price)) : cur.per_pump_price;
+    const newTotalPrice    = total_price    !== undefined ? (numOrNull(total_price)    === null ? null : parseFloat(total_price))    : cur.total_price;
+    const newGstPercent    = gst_percent    !== undefined ? (numOrNull(gst_percent)    === null ? null : parseFloat(gst_percent))    : cur.gst_percent;
 
     if (newReminderDays < 1 || newReminderDays > 365) {
       return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
@@ -719,11 +736,15 @@ const updateAmcContract = async (req, res) => {
     const result = await dbClient.query(
       `UPDATE amc_contracts
        SET title=$1, end_date=$2, value=$3, status=$4,
-           next_service_date=$5, renewal_reminder_days=$6, po_number=$7
-       WHERE id=$8
+           next_service_date=$5, renewal_reminder_days=$6, po_number=$7,
+           visit_count=$8, pumps_count=$9, per_pump_price=$10,
+           total_price=$11, gst_percent=$12
+       WHERE id=$13
        RETURNING *`,
       [newTitle, newEndDate, newValue, newStatus,
-       newNextServiceDate, newReminderDays, newPoNumber || null, id]
+       newNextServiceDate, newReminderDays, newPoNumber || null,
+       newVisitCount, newPumpsCount, newPerPumpPrice, newTotalPrice, newGstPercent,
+       id]
     );
 
     if (Array.isArray(services)) {

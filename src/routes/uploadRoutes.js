@@ -4,7 +4,7 @@
 
 const express  = require('express');
 const router   = express.Router();
-const { uploadFiles, uploadTechnicalReports, deleteFile } = require('../controllers/uploadController');
+const { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, deleteFile } = require('../controllers/uploadController');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, uploadDocs, handleUploadErrors } = require('../middleware/uploadMiddleware');
 
@@ -137,6 +137,50 @@ router.post(
   protect,
   handleUploadErrors(uploadDocs.array('files', 10)),
   uploadTechnicalReports
+);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/upload/document-links:
+ *   post:
+ *     summary: Upload document(s) for upload_document_link[]
+ *     description: |
+ *       "Normal" document upload. Upload one or more documents and get
+ *       back URLs to place in the `upload_document_link[]` array when
+ *       calling `POST /api/reports`, or POST to `/api/reports/:id/documents`.
+ *
+ *       **Accepted types:** PDF, JPEG, PNG, WebP, DOC, DOCX
+ *       **Limits:** Max 20MB each, max 10 files per request.
+ *     tags: [Upload]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [files]
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: One or more document files (PDF, Word, images)
+ *     responses:
+ *       201:
+ *         description: Files uploaded successfully
+ *       400:
+ *         description: No files, invalid type, or file too large
+ */
+router.post(
+  '/document-links',
+  protect,
+  handleUploadErrors(uploadDocs.array('files', 10)),
+  uploadDocumentLinks
 );
 
 // ────────────────────────────────────────────────────────────

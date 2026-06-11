@@ -12,6 +12,7 @@ const {
   shareReport,
   updateReportStatus,
   addReportImage,
+  addReportDocumentLink,
 } = require('../controllers/reportController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -467,5 +468,60 @@ router.patch('/:id/status', protect, authorize('admin'), updateReportStatus);
  *         description: Report not found
  */
 router.post('/:id/images', protect, addReportImage);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/reports/{id}/documents:
+ *   post:
+ *     summary: Add document link(s) to an existing report
+ *     description: |
+ *       Attach one or more document links to a report by ID.
+ *       Pass a single item or an array. Each item is either a plain URL
+ *       string or an object with file_url (and optional file_name,
+ *       mime_type, file_size_bytes).
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *         example: RPT-0001
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             oneOf:
+ *               - type: string
+ *                 example: 'https://yourserver.com/uploads/doc.pdf'
+ *               - type: object
+ *                 required: [file_url]
+ *                 properties:
+ *                   file_url:        { type: string }
+ *                   file_name:       { type: string }
+ *                   mime_type:       { type: string }
+ *                   file_size_bytes: { type: integer }
+ *               - type: array
+ *                 items:
+ *                   type: object
+ *                   required: [file_url]
+ *                   properties:
+ *                     file_url:        { type: string }
+ *                     file_name:       { type: string }
+ *                     mime_type:       { type: string }
+ *                     file_size_bytes: { type: integer }
+ *     responses:
+ *       201:
+ *         description: Document link(s) added
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Report not found
+ */
+router.post('/:id/documents', protect, addReportDocumentLink);
 
 module.exports = router;

@@ -19,6 +19,32 @@ const generateReportId = async (client) => {
   return `RPT-${String(lastNum + 1).padStart(4, '0')}`;
 };
 
+// ─── Helper: normalize upload_document_link[] entries ────────
+// Each entry may be a plain URL string OR an object:
+//   { file_url, file_name?, mime_type?, file_size_bytes? }
+// Returns a normalized object or null if there is no usable URL.
+const normalizeDocumentLink = (entry) => {
+  if (!entry) return null;
+  if (typeof entry === 'string') {
+    const url = entry.trim();
+    if (!url) return null;
+    return {
+      file_url:        url,
+      file_name:       url.split('/').pop() || url,
+      mime_type:       null,
+      file_size_bytes: null,
+    };
+  }
+  const url = entry.file_url || entry.url || entry.link;
+  if (!url) return null;
+  return {
+    file_url:        url,
+    file_name:       entry.file_name || url.split('/').pop() || url,
+    mime_type:       entry.mime_type || null,
+    file_size_bytes: entry.file_size_bytes || null,
+  };
+};
+
 // ─── MASTER ISSUE DATA — full matrix from PDF Pages 2 & 3 ────
 const MASTER_ISSUE_DATA = [
   {
@@ -739,6 +765,7 @@ const createReport = async (req, res) => {
       po_number, location, serial_no, comments,
       client_id, client_name, client_email,
       technical_reports = [],
+      upload_document_link = [],
       company_name, contact_person,
       model_serial_installation, operating_hours_per_day,
       application_process_description, remarks,
@@ -752,7 +779,8 @@ const createReport = async (req, res) => {
     if (!technician_id) missing.push('technician_id');
     if (missing.length > 0) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, `Please fill in all required fields: ${missing.join(', ')}.`, { missing_fields: missing });
 
-    if (!Array.isArray(technical_reports))  return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'technical_reports must be an array.', { field: 'technical_reports' });
+    if (!Array.isArray(technical_reports))     return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'technical_reports must be an array.', { field: 'technical_reports' });
+    if (!Array.isArray(upload_document_link))  return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'upload_document_link must be an array.', { field: 'upload_document_link' });
     if (!Array.isArray(checklist_items))    return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'checklist_items must be an array.', { field: 'checklist_items' });
     if (!Array.isArray(issue_observations)) return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'issue_observations must be an array.', { field: 'issue_observations' });
     if (!Array.isArray(mandatory_spares))   return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'mandatory_spares must be an array.', { field: 'mandatory_spares' });
@@ -830,13 +858,26 @@ const createReport = async (req, res) => {
       savedTechnicalReports.push(tr.rows[0]);
     }
 
+    const savedDocumentLinks = [];
+    for (const raw of upload_document_link) {
+      const doc = normalizeDocumentLink(raw);
+      if (!doc) continue;
+      const dl = await dbClient.query(
+        `INSERT INTO report_document_links (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
+        [reportId, doc.file_name, doc.file_url, doc.mime_type, doc.file_size_bytes, req.user.id]
+      );
+      savedDocumentLinks.push(dl.rows[0]);
+    }
+
     await dbClient.query('COMMIT');
 
-    createdReport.technician_name    = techCheck.rows[0].name;
-    createdReport.technical_reports  = savedTechnicalReports;
-    createdReport.checklist_items    = checklist_items;
-    createdReport.issue_observations = issue_observations;
-    createdReport.mandatory_spares   = mandatory_spares;
+    createdReport.technician_name      = techCheck.rows[0].name;
+    createdReport.technical_reports    = savedTechnicalReports;
+    createdReport.upload_document_link = savedDocumentLinks;
+    createdReport.checklist_items      = checklist_items;
+    createdReport.issue_observations   = issue_observations;
+    createdReport.mandatory_spares     = mandatory_spares;
 
     if (resolvedClientEmail) {
       const html = buildReportEmailHtml(createdReport, savedTechnicalReports);
@@ -882,18 +923,20 @@ const getReportById = async (req, res) => {
     );
     if (result.rows.length === 0) return Errors.reportNotFound(res);
     const report = result.rows[0];
-    const [images, techReports, checklist, issues, spares] = await Promise.all([
+    const [images, techReports, checklist, issues, spares, docLinks] = await Promise.all([
       pool.query(`SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at FROM report_images WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
       pool.query(`SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at FROM technical_reports WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
       pool.query(`SELECT sr, description, status FROM report_checklist_items WHERE report_id = $1 ORDER BY sr ASC`, [id]),
       pool.query(`SELECT sr, issue, observation, impact_on_pump, severity, recommended_spares FROM report_issue_observations WHERE report_id = $1 ORDER BY id ASC`, [id]),
       pool.query(`SELECT spare_name, pump_model, total_to_order FROM report_mandatory_spares WHERE report_id = $1 ORDER BY id ASC`, [id]),
+      pool.query(`SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at FROM report_document_links WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
     ]);
-    report.images             = images.rows;
-    report.technical_reports  = techReports.rows;
-    report.checklist_items    = checklist.rows;
-    report.issue_observations = issues.rows;
-    report.mandatory_spares   = spares.rows;
+    report.images               = images.rows;
+    report.technical_reports    = techReports.rows;
+    report.checklist_items      = checklist.rows;
+    report.issue_observations   = issues.rows;
+    report.mandatory_spares     = spares.rows;
+    report.upload_document_link = docLinks.rows;
     return res.status(200).json({ success: true, data: report });
   } catch (error) {
     console.error('Get report by ID error:', error);
@@ -1043,7 +1086,44 @@ const addReportImage = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// POST /api/reports/:id/documents
+// Upload document link(s) to an EXISTING report by report id.
+// Body: a single object/string or an array of them. Each item is
+// either a plain URL string or { file_url, file_name?, mime_type?,
+// file_size_bytes? }.
+// ────────────────────────────────────────────────────────────
+const addReportDocumentLink = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const raw = Array.isArray(req.body) ? req.body : [req.body];
+
+    const existCheck = await pool.query('SELECT id FROM reports WHERE id = $1', [id]);
+    if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    const docs = raw.map(normalizeDocumentLink).filter(Boolean);
+    if (docs.length === 0)
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'Each document link must have a file_url (or be a non-empty URL string).', { field: 'upload_document_link' });
+
+    const inserted = [];
+    for (const doc of docs) {
+      const r = await pool.query(
+        `INSERT INTO report_document_links (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
+        [id, doc.file_name, doc.file_url, doc.mime_type, doc.file_size_bytes, req.user.id]
+      );
+      inserted.push(r.rows[0]);
+    }
+
+    return res.status(201).json({ success: true, message: `${inserted.length} document link(s) added to report ${id}.`, data: inserted });
+  } catch (error) {
+    console.error('Add report document link error:', error);
+    return Errors.internalError(res);
+  }
+};
+
 module.exports = {
   getReports, createReport, getReportById,
   generateReportPdf, shareReport, updateReportStatus, addReportImage,
+  addReportDocumentLink,
 };

@@ -131,6 +131,72 @@ const uploadTechnicalReports = async (req, res) => {
 };
 
 // ────────────────────────────────────────────────────────────
+// POST /api/upload/document-links
+// "Normal" document upload — upload one or more documents and get
+// back URLs to place in the `upload_document_link[]` array when
+// calling POST /api/reports (or POST /api/reports/:id/documents).
+// No report ID required here.
+//
+// Body: multipart/form-data, field: files (1–10 files)
+// Accepts: PDF, JPEG, PNG, WebP, DOC, DOCX
+// ────────────────────────────────────────────────────────────
+const uploadDocumentLinks = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        'No files uploaded. Please attach at least one file under the "files" field.');
+    }
+
+    const uploaded = [];
+
+    for (const file of req.files) {
+      const fileUrl = getFileUrl(req, file.filename);
+
+      const result = await pool.query(
+        `INSERT INTO uploads
+           (original_name, stored_name, file_url, mime_type, file_size_bytes,
+            entity_type, entity_id, uploaded_by_user_id)
+         VALUES ($1, $2, $3, $4, $5, 'document_link', NULL, $6)
+         RETURNING id, original_name, stored_name, file_url, mime_type,
+                   file_size_bytes, uploaded_at`,
+        [
+          file.originalname,
+          file.filename,
+          fileUrl,
+          file.mimetype,
+          file.size,
+          req.user.id,
+        ]
+      );
+
+      const row = result.rows[0];
+
+      // Shape to match what `upload_document_link[]` expects
+      uploaded.push({
+        id:              row.id,
+        file_name:       row.original_name,
+        stored_name:     row.stored_name,
+        file_url:        row.file_url,
+        mime_type:       row.mime_type,
+        file_size_bytes: row.file_size_bytes,
+        uploaded_at:     row.uploaded_at,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${uploaded.length} document(s) uploaded successfully.`,
+      data:    uploaded,
+      note:    'Pass these objects in the upload_document_link[] array when calling POST /api/reports, or POST them to /api/reports/:id/documents.',
+    });
+
+  } catch (error) {
+    console.error('Upload document links error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
 // DELETE /api/upload/:id
 // Deletes file from disk AND removes DB record
 // ────────────────────────────────────────────────────────────
@@ -172,4 +238,4 @@ const deleteFile = async (req, res) => {
   }
 };
 
-module.exports = { uploadFiles, uploadTechnicalReports, deleteFile };
+module.exports = { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, deleteFile };
