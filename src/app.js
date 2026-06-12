@@ -5,6 +5,7 @@
 const express     = require('express');
 const cors        = require('cors');
 const path        = require('path');
+const fs          = require('fs');
 const swaggerUi   = require('swagger-ui-express');
 const swaggerSpec  = require('./config/swagger');
 const { sendError } = require('./utils/AppError');
@@ -36,8 +37,26 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Serve uploaded files as static assets ───────────────────
 const uploadsDir = path.join(process.cwd(), 'uploads');
-console.log('📂 Uploads directory:', uploadsDir);
-app.use('/uploads', express.static(uploadsDir, {
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📂 Created uploads directory:', uploadsDir);
+} else {
+  console.log('📂 Uploads directory exists:', uploadsDir);
+}
+// Custom middleware to check file existence and serve
+app.use('/uploads', (req, res, next) => {
+  const filePath = path.join(uploadsDir, req.path);
+  // Check if file exists
+  fs.access(filePath, fs.constants.F_OK, (err) => {
+    if (err) {
+      // File doesn't exist, send 404
+      return sendError(res, 404, ERROR_CODES.ROUTE_NOT_FOUND, `File not found: ${req.path}`);
+    }
+    // File exists, let express.static handle it
+    next();
+  });
+}, express.static(uploadsDir, {
   setHeaders: (res, path) => {
     // Set correct Content-Type for PDFs
     if (path.endsWith('.pdf')) {
