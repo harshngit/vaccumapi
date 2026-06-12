@@ -36,7 +36,15 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Serve uploaded files as static assets ───────────────────
 const uploadsDir = path.join(process.cwd(), 'uploads');
-app.use('/uploads', express.static(uploadsDir));
+console.log('📂 Uploads directory:', uploadsDir);
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, path) => {
+    // Set correct Content-Type for PDFs
+    if (path.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+    }
+  }
+}));
 
 // ─── Swagger Docs ────────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

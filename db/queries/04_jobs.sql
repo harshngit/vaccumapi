@@ -38,9 +38,10 @@ END $$;
 
 DO $$ BEGIN
   CREATE TYPE job_category AS ENUM (
-    'Maintenance',
-    'Repair',
-    'Installation',
+    'Service',
+    'AMC Visit',
+    'Breakdown',
+    'Installation & Commissioning',
     'Inspection'
   );
 EXCEPTION
@@ -57,7 +58,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   technician_id     INTEGER                REFERENCES technicians(id) ON DELETE SET NULL,
   status            job_status    NOT NULL DEFAULT 'Raised',
   priority          job_priority  NOT NULL DEFAULT 'Medium',
-  category          job_category  NOT NULL DEFAULT 'Maintenance',
+  category          job_category  NOT NULL DEFAULT 'Service',
   amount            NUMERIC(12,2) DEFAULT 0.00,
   raised_date       DATE          NOT NULL DEFAULT CURRENT_DATE,
   scheduled_date    DATE,
