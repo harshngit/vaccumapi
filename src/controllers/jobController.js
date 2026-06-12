@@ -38,7 +38,7 @@ const getJobs = async (req, res) => {
 
     if (status   && !isValidJobStatus(status))   return sendError(res, 400, ERROR_CODES.INVALID_JOB_STATUS,   'Invalid status. Allowed: Raised, Assigned, In Progress, Closed.',               { field: 'status' });
     if (priority && !isValidJobPriority(priority)) return sendError(res, 400, ERROR_CODES.INVALID_JOB_PRIORITY, 'Invalid priority. Allowed: Low, Medium, High, Critical.',                       { field: 'priority' });
-    if (category && !isValidJobCategory(category)) return sendError(res, 400, ERROR_CODES.INVALID_JOB_CATEGORY, 'Invalid category. Allowed: Maintenance, Repair, Installation, Inspection.',     { field: 'category' });
+    if (category && !isValidJobCategory(category)) return sendError(res, 400, ERROR_CODES.INVALID_JOB_CATEGORY, 'Invalid category. Allowed: Service, AMC Visit, Breakdown, Installation & Commissioning, Inspection.',     { field: 'category' });
 
     const conditions = [];
     const values     = [];
@@ -178,7 +178,7 @@ const createJob = async (req, res) => {
   try {
     const {
       title, description, client_id, technician_id,
-      priority = 'Medium', category = 'Maintenance',
+      priority = 'Medium', category = 'Service',
       scheduled_date, amount = 0, amc_id,
     } = req.body;
 
@@ -197,7 +197,7 @@ const createJob = async (req, res) => {
     }
     if (!isValidJobCategory(category)) {
       return sendError(res, 400, ERROR_CODES.INVALID_JOB_CATEGORY,
-        'Invalid category. Allowed: Maintenance, Repair, Installation, Inspection.', { field: 'category' });
+        'Invalid category. Allowed: Service, AMC Visit, Breakdown, Installation & Commissioning, Inspection.', { field: 'category' });
     }
 
     const clientCheck = await dbClient.query('SELECT id, name FROM clients WHERE id = $1', [client_id]);
@@ -345,7 +345,7 @@ const updateJob = async (req, res) => {
     }
     if (category && !isValidJobCategory(category)) {
       return sendError(res, 400, ERROR_CODES.INVALID_JOB_CATEGORY,
-        'Invalid category. Allowed: Maintenance, Repair, Installation, Inspection.', { field: 'category' });
+        'Invalid category. Allowed: Service, AMC Visit, Breakdown, Installation & Commissioning, Inspection.', { field: 'category' });
     }
 
     if (technician_id) {
