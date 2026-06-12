@@ -66,8 +66,6 @@ async function fetchFromERP(endpoint, params = {}) {
 const getQuotations = async (req, res) => {
   try {
     const {
-      page        = 1,
-      limit       = 50,
       customer_id,
       from_date,
       to_date,
@@ -76,8 +74,6 @@ const getQuotations = async (req, res) => {
     } = req.query;
 
     const erpData = await fetchFromERP('QuotationAPI.ashx', {
-      page,
-      limit,
       customer_id,
       from_date,
       to_date,

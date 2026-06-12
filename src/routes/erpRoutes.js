@@ -239,18 +239,6 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: Page number for pagination
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 50
- *         description: Number of records per page
- *       - in: query
  *         name: customer_id
  *         schema:
  *           type: string
