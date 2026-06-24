@@ -12,13 +12,22 @@ const {
   deleteTechnician,
   technicianLogin,
 } = require('../controllers/technicianController');
+const {
+  addTechnicianDocument,
+  getTechnicianDocuments,
+  updateTechnicianDocument,
+  deleteTechnicianDocument,
+  getExpiringDocuments,
+} = require('../controllers/technicianDocController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 /**
  * @swagger
  * tags:
- *   name: Technicians
- *   description: Technician management and login
+ *   - name: Technicians
+ *     description: Technician management and login
+ *   - name: Technician Documents
+ *     description: Upload and manage technician documents (Aadhaar, WC Policy, Insurance, etc.)
  */
 
 // ────────────────────────────────────────────────────────────
@@ -155,8 +164,22 @@ router.get('/', protect, getTechnicians);
  *                 status: Active
  *                 join_date: "2024-01-20"
  *                 password: techpass123
+ *                 documents:
+ *                   - document_type: Aadhaar Card
+ *                     document_name: Ravi Aadhaar Front
+ *                     file_name: aadhaar_front.jpg
+ *                     file_url: https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg
+ *                     mime_type: image/jpeg
+ *                     expiry_date: "2030-12-31"
+ *                   - document_type: WC Policy
+ *                     document_name: WC Policy 2024-25
+ *                     file_name: wc_policy.pdf
+ *                     file_url: https://apivdti.asynk.in/uploads/1714012345679_wc_policy.pdf
+ *                     mime_type: application/pdf
+ *                     expiry_date: "2025-03-31"
+ *                     notes: Renewal due March 2025
  *             WithoutLogin:
- *               summary: Create technician (admin-managed, no login)
+ *               summary: Create technician without login (no documents)
  *               value:
  *                 name: Suresh Patel
  *                 phone: "9876500001"
@@ -185,6 +208,55 @@ router.get('/', protect, getTechnicians);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', protect, authorize('admin', 'manager', 'engineer'), createTechnician);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/documents/expiring:
+ *   get:
+ *     summary: List all technician documents that are expired or expiring soon
+ *     description: |
+ *       Returns documents across ALL technicians whose `expiry_date` falls within
+ *       the next N days (default 30). Includes already-expired documents.
+ *       Use this for dashboard alerts and notification widgets.
+ *     tags: [Technician Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema: { type: integer, default: 30 }
+ *         description: Look-ahead window in days (e.g. 30 = expiring within 30 days + already expired)
+ *     responses:
+ *       200:
+ *         description: Expiring and expired documents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 days_window: { type: integer }
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     expired: { type: integer }
+ *                     expiring_soon: { type: integer }
+ *                     total: { type: integer }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     expired:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/TechnicianDocumentResponse'
+ *                     expiring:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/TechnicianDocumentResponse'
+ */
+router.get('/documents/expiring', protect, getExpiringDocuments);
 
 // ────────────────────────────────────────────────────────────
 
@@ -316,5 +388,169 @@ router.put('/:id', protect, authorize('admin', 'manager', 'engineer'), updateTec
  *                       example: [JOB-0001, JOB-0003]
  */
 router.delete('/:id', protect, authorize('admin', 'manager'), deleteTechnician);
+
+// ────────────────────────────────────────────────────────────
+// TECHNICIAN DOCUMENTS (nested under /:id)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/documents:
+ *   get:
+ *     summary: List all documents for a technician
+ *     tags: [Technician Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *       - in: query
+ *         name: document_type
+ *         schema:
+ *           type: string
+ *           enum: [Aadhaar Card, Technician Photo, WC Policy, Medical Insurance Policy, Other]
+ *         description: Optional filter by document type
+ *     responses:
+ *       200:
+ *         description: List of documents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 total: { type: integer }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TechnicianDocumentResponse'
+ *       404:
+ *         description: Technician not found
+ */
+router.get('/:id/documents', protect, getTechnicianDocuments);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/documents:
+ *   post:
+ *     summary: Attach a document to a technician
+ *     description: |
+ *       Links an uploaded document to the technician's profile.
+ *
+ *       **Flow:**
+ *       1. Upload file via `POST /api/upload/technician-documents` → get `file_name` + `file_url`
+ *       2. Call this endpoint with the file metadata + `document_type` + optional `expiry_date`
+ *     tags: [Technician Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AddTechnicianDocumentRequest'
+ *     responses:
+ *       201:
+ *         description: Document attached
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   $ref: '#/components/schemas/TechnicianDocumentResponse'
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Technician not found
+ */
+router.post('/:id/documents', protect, authorize('admin', 'manager', 'engineer'), addTechnicianDocument);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/documents/{docId}:
+ *   put:
+ *     summary: Update document metadata (name, expiry date, notes)
+ *     tags: [Technician Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *       - in: path
+ *         name: docId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Document ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateTechnicianDocumentRequest'
+ *     responses:
+ *       200:
+ *         description: Document updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   $ref: '#/components/schemas/TechnicianDocumentResponse'
+ *       404:
+ *         description: Document not found
+ */
+router.put('/:id/documents/:docId', protect, authorize('admin', 'manager', 'engineer'), updateTechnicianDocument);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/documents/{docId}:
+ *   delete:
+ *     summary: Delete a technician document
+ *     description: Removes the document record and deletes the physical file from disk.
+ *     tags: [Technician Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *       - in: path
+ *         name: docId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Document ID
+ *     responses:
+ *       200:
+ *         description: Document deleted
+ *       404:
+ *         description: Document not found
+ */
+router.delete('/:id/documents/:docId', protect, authorize('admin', 'manager'), deleteTechnicianDocument);
 
 module.exports = router;

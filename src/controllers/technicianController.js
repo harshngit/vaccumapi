@@ -15,6 +15,14 @@ const {
   computeAvatar,
 } = require('../utils/validators');
 
+const VALID_DOC_TYPES = [
+  'Aadhaar Card',
+  'Technician Photo',
+  'WC Policy',
+  'Medical Insurance Policy',
+  'Other',
+];
+
 const generateToken = (userId) =>
   jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -115,6 +123,8 @@ const createTechnician = async (req, res) => {
       join_date,
       // Optional login credentials — if provided, creates/links a user account
       password,
+      // Optional documents array
+      documents,
     } = req.body;
 
     // Required fields
@@ -277,11 +287,57 @@ const createTechnician = async (req, res) => {
       );
     }
 
+    // ── Insert documents if provided ─────────────────────
+    const insertedDocs = [];
+    if (Array.isArray(documents) && documents.length > 0) {
+      const techId = techResult.rows[0].id;
+
+      for (const doc of documents) {
+        if (!doc.document_type || !doc.document_name || !doc.file_name || !doc.file_url) {
+          await client.query('ROLLBACK');
+          return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+            'Each document must have: document_type, document_name, file_name, file_url.',
+            { invalid_document: doc });
+        }
+
+        if (!VALID_DOC_TYPES.includes(doc.document_type)) {
+          await client.query('ROLLBACK');
+          return sendError(res, 400, ERROR_CODES.INVALID_DOCUMENT_TYPE,
+            `Invalid document_type "${doc.document_type}". Allowed: ${VALID_DOC_TYPES.join(', ')}.`,
+            { allowed: VALID_DOC_TYPES });
+        }
+
+        const docResult = await client.query(
+          `INSERT INTO technician_documents
+             (technician_id, document_type, document_name, file_name, file_url,
+              mime_type, file_size_bytes, expiry_date, notes, uploaded_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING *`,
+          [
+            techId,
+            doc.document_type,
+            doc.document_name.trim(),
+            doc.file_name,
+            doc.file_url,
+            doc.mime_type || 'application/pdf',
+            doc.file_size_bytes || null,
+            doc.expiry_date || null,
+            doc.notes || null,
+            req.user.id,
+          ]
+        );
+        insertedDocs.push(docResult.rows[0]);
+      }
+    }
+
     await client.query('COMMIT');
+
+    const responseData = techResult.rows[0];
+    responseData.documents = insertedDocs;
 
     await logActivity({
       type:         'technician',
-      action:       `Technician "${name}" added`,
+      action:       `Technician "${name}" added${insertedDocs.length ? ` with ${insertedDocs.length} document(s)` : ''}`,
       entity_type:  'technician',
       entity_id:    String(techResult.rows[0].id),
       performed_by: req.user.id,
@@ -290,7 +346,7 @@ const createTechnician = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: `Technician ${name} added successfully.`,
-      data: techResult.rows[0],
+      data: responseData,
     });
 
   } catch (error) {
@@ -337,6 +393,18 @@ const getTechnicianById = async (req, res) => {
     );
 
     technician.recent_jobs = recentJobs.rows;
+
+    // Documents
+    const docs = await pool.query(
+      `SELECT id, document_type, document_name, file_name, file_url,
+              mime_type, file_size_bytes, expiry_date, notes, created_at
+       FROM technician_documents
+       WHERE technician_id = $1
+       ORDER BY document_type, created_at DESC`,
+      [id]
+    );
+
+    technician.documents = docs.rows;
 
     return res.status(200).json({ success: true, data: technician });
 

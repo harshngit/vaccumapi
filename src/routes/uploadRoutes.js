@@ -5,6 +5,7 @@
 const express  = require('express');
 const router   = express.Router();
 const { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, deleteFile } = require('../controllers/uploadController');
+const { uploadTechnicianDocFiles } = require('../controllers/technicianDocController');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, uploadDocs, handleUploadErrors } = require('../middleware/uploadMiddleware');
 
@@ -181,6 +182,68 @@ router.post(
   protect,
   handleUploadErrors(uploadDocs.array('files', 10)),
   uploadDocumentLinks
+);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/upload/technician-documents:
+ *   post:
+ *     summary: Upload technician document files (PDF, JPG, PNG)
+ *     description: |
+ *       Upload one or more technician document files **before** attaching them.
+ *       No technician ID is needed at this stage.
+ *
+ *       **Typical flow:**
+ *       1. Call `POST /api/upload/technician-documents` with your files (multipart).
+ *       2. Take the `file_name` + `file_url` from the response.
+ *       3. Pass them when calling `POST /api/technicians/:id/documents`.
+ *
+ *       **Accepted types:** PDF, JPEG, PNG, WebP, DOC, DOCX
+ *       **Limits:** Max 20MB each, max 10 files per request.
+ *     tags: [Upload]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [files]
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: One or more document files (PDF, JPG, PNG, WebP, DOC, DOCX)
+ *     responses:
+ *       201:
+ *         description: Files uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string }
+ *                 note:
+ *                   type: string
+ *                   example: Use file_name + file_url when calling POST /api/technicians/:id/documents.
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TechnicianDocUploadItem'
+ *       400:
+ *         description: No files, invalid type, or file too large
+ */
+router.post(
+  '/technician-documents',
+  protect,
+  handleUploadErrors(uploadDocs.array('files', 10)),
+  uploadTechnicianDocFiles
 );
 
 // ────────────────────────────────────────────────────────────

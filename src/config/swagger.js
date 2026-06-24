@@ -115,6 +115,24 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             status: { type: 'string', enum: ['Active','On Leave','Inactive'], default: 'Active' },
             join_date: { type: 'string', format: 'date', example: '2024-01-20' },
             password: { type: 'string', minLength: 6, description: 'Optional. Creates login account if provided.' },
+            documents: {
+              type: 'array',
+              description: 'Optional. Attach documents at creation time. Upload files first via POST /api/upload/technician-documents.',
+              items: {
+                type: 'object',
+                required: ['document_type', 'document_name', 'file_name', 'file_url'],
+                properties: {
+                  document_type:   { type: 'string', enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'], example: 'Aadhaar Card' },
+                  document_name:   { type: 'string', example: 'Ravi Aadhaar Front' },
+                  file_name:       { type: 'string', example: 'aadhaar_front.jpg' },
+                  file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg' },
+                  mime_type:       { type: 'string', default: 'application/pdf' },
+                  file_size_bytes: { type: 'integer' },
+                  expiry_date:     { type: 'string', format: 'date', example: '2026-12-31' },
+                  notes:           { type: 'string', example: 'Front side scan' },
+                },
+              },
+            },
           },
         },
         UpdateTechnicianRequest: {
@@ -128,6 +146,114 @@ Use the **Authorize** button (top right) and enter your JWT token as:
         PaginatedTechniciansResponse: {
           type: 'object',
           properties: { success: { type: 'boolean' }, data: { type: 'array', items: { $ref: '#/components/schemas/TechnicianResponse' } }, pagination: { $ref: '#/components/schemas/Pagination' } },
+        },
+        TechnicianLoginResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            message: { type: 'string', example: 'Welcome back, Ravi Kumar!' },
+            token:   { type: 'string' },
+            user: {
+              type: 'object',
+              properties: {
+                id:                { type: 'integer' },
+                email:             { type: 'string', nullable: true },
+                first_name:        { type: 'string' },
+                last_name:         { type: 'string' },
+                phone_number:      { type: 'string', nullable: true },
+                role:              { type: 'string', example: 'technician' },
+                is_active:         { type: 'boolean' },
+                technician_id:     { type: 'integer', nullable: true },
+                technician_name:   { type: 'string', nullable: true },
+                specialization:    { type: 'string', nullable: true },
+                technician_status: { type: 'string', nullable: true },
+                avatar:            { type: 'string', nullable: true },
+              },
+            },
+          },
+        },
+        TechnicianDetailResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' }, user_id: { type: 'integer', nullable: true },
+            name: { type: 'string' }, email: { type: 'string', nullable: true },
+            phone: { type: 'string' }, specialization: { type: 'string' },
+            status: { type: 'string', enum: ['Active','On Leave','Inactive'] },
+            join_date: { type: 'string', format: 'date', nullable: true },
+            jobs_completed: { type: 'integer' }, rating: { type: 'number' }, avatar: { type: 'string' },
+            created_at: { type: 'string', format: 'date-time' }, updated_at: { type: 'string', format: 'date-time' },
+            recent_jobs: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', example: 'JOB-0001' }, title: { type: 'string' },
+                  status: { type: 'string' }, closed_date: { type: 'string', format: 'date', nullable: true },
+                },
+              },
+            },
+            documents: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/TechnicianDocumentResponse' },
+            },
+          },
+        },
+
+        // ── Technician Documents ─────────────────────────────
+        TechnicianDocumentResponse: {
+          type: 'object',
+          properties: {
+            id:              { type: 'integer' },
+            technician_id:   { type: 'integer' },
+            document_type:   { type: 'string', enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'] },
+            document_name:   { type: 'string', example: 'Ravi Aadhaar Front' },
+            file_name:       { type: 'string', example: 'aadhaar_front.jpg' },
+            file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg' },
+            mime_type:       { type: 'string', example: 'image/jpeg' },
+            file_size_bytes: { type: 'integer', nullable: true },
+            expiry_date:     { type: 'string', format: 'date', nullable: true, example: '2026-12-31' },
+            notes:           { type: 'string', nullable: true },
+            uploaded_by:     { type: 'integer', nullable: true },
+            uploaded_by_name:{ type: 'string', nullable: true },
+            expiry_status:   { type: 'string', enum: ['expired','expiring_soon'], nullable: true, description: 'Only present in /documents/expiring response' },
+            technician_name: { type: 'string', nullable: true, description: 'Only present in /documents/expiring response' },
+            technician_phone:{ type: 'string', nullable: true, description: 'Only present in /documents/expiring response' },
+            created_at:      { type: 'string', format: 'date-time' },
+            updated_at:      { type: 'string', format: 'date-time' },
+          },
+        },
+        AddTechnicianDocumentRequest: {
+          type: 'object', required: ['document_type', 'document_name', 'file_name', 'file_url'],
+          properties: {
+            document_type:   { type: 'string', enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'], example: 'Aadhaar Card' },
+            document_name:   { type: 'string', example: 'Ravi Aadhaar Front' },
+            file_name:       { type: 'string', example: 'aadhaar_front.jpg', description: 'Original filename from upload response' },
+            file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg', description: 'URL from upload response' },
+            mime_type:       { type: 'string', default: 'application/pdf' },
+            file_size_bytes: { type: 'integer' },
+            expiry_date:     { type: 'string', format: 'date', example: '2026-12-31', description: 'Optional. Track document expiry.' },
+            notes:           { type: 'string', example: 'Front side scan' },
+          },
+        },
+        UpdateTechnicianDocumentRequest: {
+          type: 'object',
+          properties: {
+            document_name: { type: 'string' },
+            expiry_date:   { type: 'string', format: 'date', nullable: true, description: 'Pass null to clear expiry' },
+            notes:         { type: 'string', nullable: true },
+          },
+        },
+        TechnicianDocUploadItem: {
+          type: 'object',
+          properties: {
+            id:              { type: 'integer' },
+            file_name:       { type: 'string', example: 'aadhaar_front.jpg' },
+            stored_name:     { type: 'string' },
+            file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg' },
+            mime_type:       { type: 'string', example: 'image/jpeg' },
+            file_size_bytes: { type: 'integer' },
+            uploaded_at:     { type: 'string', format: 'date-time' },
+          },
         },
 
         // ── Client ────────────────────────────────────────────
@@ -166,6 +292,18 @@ Use the **Authorize** button (top right) and enter your JWT token as:
         PaginatedClientsResponse: {
           type: 'object',
           properties: { success: { type: 'boolean' }, data: { type: 'array', items: { $ref: '#/components/schemas/ClientResponse' } }, pagination: { $ref: '#/components/schemas/Pagination' } },
+        },
+        ClientDetailResponse: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer' }, name: { type: 'string' }, contact_person: { type: 'string' },
+            email: { type: 'string', nullable: true }, phone: { type: 'string', nullable: true },
+            gst_no: { type: 'string', nullable: true }, address: { type: 'string', nullable: true },
+            type: { type: 'string' }, status: { type: 'string' },
+            contract_value: { type: 'number' }, join_date: { type: 'string', format: 'date', nullable: true },
+            created_at: { type: 'string', format: 'date-time' }, updated_at: { type: 'string', format: 'date-time' },
+            total_jobs: { type: 'integer' }, open_jobs: { type: 'integer' }, active_amc_count: { type: 'integer' },
+          },
         },
 
         // ── Job ───────────────────────────────────────────────
@@ -387,6 +525,81 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             id: { type: 'integer' }, file_name: { type: 'string' }, file_url: { type: 'string' },
             mime_type: { type: 'string' }, file_size_bytes: { type: 'integer', nullable: true },
             uploaded_at: { type: 'string', format: 'date-time' },
+          },
+        },
+
+        // ── Dashboard ─────────────────────────────────────────
+        DashboardResponse: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                stats: {
+                  type: 'object',
+                  properties: {
+                    active_jobs:        { type: 'integer' },
+                    total_clients:      { type: 'integer' },
+                    active_technicians: { type: 'integer' },
+                    total_technicians:  { type: 'integer' },
+                    revenue_approved:   { type: 'number' },
+                    pending_reports:    { type: 'integer' },
+                    active_amc_count:   { type: 'integer' },
+                    mom_active_jobs:    { type: 'integer', nullable: true },
+                    mom_revenue:        { type: 'integer', nullable: true },
+                    mom_clients:        { type: 'integer', nullable: true },
+                  },
+                },
+                job_status_breakdown: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: { status: { type: 'string' }, count: { type: 'integer' } },
+                  },
+                },
+                monthly_stats: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      month: { type: 'string', example: 'Jun 2026' }, month_key: { type: 'string', example: '2026-06' },
+                      jobs_raised: { type: 'integer' }, jobs_completed: { type: 'integer' }, revenue: { type: 'number' },
+                    },
+                  },
+                },
+                revenue_trend: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: { month: { type: 'string' }, revenue: { type: 'number' } },
+                  },
+                },
+                quick_overview: {
+                  type: 'object',
+                  properties: {
+                    jobs_this_month:     { type: 'object', properties: { value: { type: 'integer' }, target: { type: 'integer' } } },
+                    jobs_completed:      { type: 'object', properties: { value: { type: 'integer' }, target: { type: 'integer' } } },
+                    active_technicians:  { type: 'object', properties: { value: { type: 'integer' }, target: { type: 'integer' } } },
+                    amc_active:          { type: 'object', properties: { value: { type: 'integer' }, target: { type: 'integer' } } },
+                  },
+                },
+                recent_jobs: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' }, title: { type: 'string' },
+                      client_name: { type: 'string' }, technician_name: { type: 'string', nullable: true },
+                      status: { type: 'string' }, priority: { type: 'string' },
+                      amount: { type: 'number' }, raised_date: { type: 'string', format: 'date' },
+                      scheduled_date: { type: 'string', format: 'date', nullable: true },
+                      closed_date: { type: 'string', format: 'date', nullable: true },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
 
