@@ -31,6 +31,14 @@ const uploadTechnicianDocFiles = async (req, res) => {
         'No files uploaded. Please attach at least one file under the "files" field.');
     }
 
+    const { document_type, document_name, expiry_date, notes } = req.query;
+
+    if (document_type && !VALID_DOC_TYPES.includes(document_type)) {
+      return sendError(res, 400, ERROR_CODES.INVALID_DOCUMENT_TYPE,
+        `Invalid document_type. Allowed: ${VALID_DOC_TYPES.join(', ')}.`,
+        { allowed: VALID_DOC_TYPES });
+    }
+
     const uploaded = [];
 
     for (const file of req.files) {
@@ -62,6 +70,10 @@ const uploadTechnicianDocFiles = async (req, res) => {
         mime_type:       row.mime_type,
         file_size_bytes: row.file_size_bytes,
         uploaded_at:     row.uploaded_at,
+        document_type:   document_type || null,
+        document_name:   document_name || row.original_name,
+        expiry_date:     expiry_date || null,
+        notes:           notes || null,
       });
     }
 

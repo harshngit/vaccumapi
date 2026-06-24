@@ -205,6 +205,25 @@ router.post(
  *     tags: [Upload]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: document_type
+ *         schema:
+ *           type: string
+ *           enum: [Aadhaar Card, Technician Photo, WC Policy, Medical Insurance Policy, Other]
+ *         description: Optional — pre-tag the upload with a document type
+ *       - in: query
+ *         name: document_name
+ *         schema: { type: string }
+ *         description: Optional — user-facing label (defaults to original filename)
+ *       - in: query
+ *         name: expiry_date
+ *         schema: { type: string, format: date }
+ *         description: Optional — document expiry date (e.g. 2026-12-31)
+ *       - in: query
+ *         name: notes
+ *         schema: { type: string }
+ *         description: Optional — notes about the document
  *     requestBody:
  *       required: true
  *       content:

@@ -253,6 +253,10 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             mime_type:       { type: 'string', example: 'image/jpeg' },
             file_size_bytes: { type: 'integer' },
             uploaded_at:     { type: 'string', format: 'date-time' },
+            document_type:   { type: 'string', nullable: true, enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'], description: 'Echoed from query param if provided' },
+            document_name:   { type: 'string', nullable: true, description: 'Echoed from query param, or defaults to original filename' },
+            expiry_date:     { type: 'string', format: 'date', nullable: true, description: 'Echoed from query param if provided' },
+            notes:           { type: 'string', nullable: true, description: 'Echoed from query param if provided' },
           },
         },
 
