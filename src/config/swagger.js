@@ -19,12 +19,12 @@ Use the **Authorize** button (top right) and enter your JWT token as:
 2. Use that \`file_url\` in **POST /api/jobs/:id/images** or **POST /api/reports/:id/images**
 
 ### Base URLs
-- **Production:** https://vaccumapi-o4ol.onrender.com/
+- **Production:** https://apivdti.asynk.in/
 - **Local:** http://localhost:3000
       `,
     },
     servers: [
-      { url: 'https://vaccumapi-o4ol.onrender.com/', description: '🚀 Production (Render)' },
+      { url: 'https://apivdti.asynk.in/', description: '🚀 Production SSH' },
       { url: 'http://localhost:3000',                        description: '💻 Local Dev' },
     ],
     components: {
