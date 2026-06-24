@@ -199,6 +199,37 @@ Use the **Authorize** button (top right) and enter your JWT token as:
           },
         },
 
+        // ── Technician Ratings ────────────────────────────────
+        TechnicianRatingResponse: {
+          type: 'object',
+          properties: {
+            id:            { type: 'integer' },
+            technician_id: { type: 'integer' },
+            job_id:        { type: 'string', nullable: true, example: 'JOB-0001' },
+            rating:        { type: 'number', example: 4.5 },
+            review:        { type: 'string', nullable: true, example: 'Excellent work' },
+            rated_by:      { type: 'integer', nullable: true },
+            rated_by_name: { type: 'string', nullable: true, description: 'Present in GET list' },
+            job_title:     { type: 'string', nullable: true, description: 'Present in GET list' },
+            created_at:    { type: 'string', format: 'date-time' },
+          },
+        },
+        AddTechnicianRatingRequest: {
+          type: 'object', required: ['rating'],
+          properties: {
+            rating: { type: 'number', minimum: 1, maximum: 5, example: 4.5, description: 'Rating 1.0–5.0 (rounded to nearest 0.5)' },
+            review: { type: 'string', example: 'Excellent work, completed ahead of schedule' },
+            job_id: { type: 'string', example: 'JOB-0001', description: 'Optional. Job must be Closed and assigned to this technician. One rating per job.' },
+          },
+        },
+        UpdateTechnicianRatingRequest: {
+          type: 'object',
+          properties: {
+            rating: { type: 'number', minimum: 1, maximum: 5, example: 4.0 },
+            review: { type: 'string', nullable: true },
+          },
+        },
+
         // ── Technician Documents ─────────────────────────────
         TechnicianDocumentResponse: {
           type: 'object',

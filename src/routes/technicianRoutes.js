@@ -19,6 +19,12 @@ const {
   deleteTechnicianDocument,
   getExpiringDocuments,
 } = require('../controllers/technicianDocController');
+const {
+  addRating,
+  getRatings,
+  updateRating,
+  deleteRating,
+} = require('../controllers/technicianRatingController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 /**
@@ -28,6 +34,8 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *     description: Technician management and login
  *   - name: Technician Documents
  *     description: Upload and manage technician documents (Aadhaar, WC Policy, Insurance, etc.)
+ *   - name: Technician Ratings
+ *     description: Rate technicians after jobs are completed
  */
 
 // ────────────────────────────────────────────────────────────
@@ -552,5 +560,193 @@ router.put('/:id/documents/:docId', protect, authorize('admin', 'manager', 'engi
  *         description: Document not found
  */
 router.delete('/:id/documents/:docId', protect, authorize('admin', 'manager'), deleteTechnicianDocument);
+
+// ────────────────────────────────────────────────────────────
+// TECHNICIAN RATINGS
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/ratings:
+ *   get:
+ *     summary: List all ratings for a technician
+ *     tags: [Technician Ratings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *     responses:
+ *       200:
+ *         description: Ratings list with average
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 average_rating: { type: number, example: 4.25 }
+ *                 total_ratings: { type: integer, example: 8 }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TechnicianRatingResponse'
+ *       404:
+ *         description: Technician not found
+ */
+router.get('/:id/ratings', protect, getRatings);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/ratings:
+ *   post:
+ *     summary: Rate a technician (optionally for a specific closed job)
+ *     description: |
+ *       Adds a rating (1–5) for the technician. If `job_id` is provided,
+ *       the job must be closed and assigned to this technician.
+ *       Only one rating per technician per job is allowed.
+ *
+ *       The technician's `rating` field (average) is automatically recalculated.
+ *     tags: [Technician Ratings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AddTechnicianRatingRequest'
+ *           examples:
+ *             WithJob:
+ *               summary: Rate after a specific job
+ *               value:
+ *                 rating: 4.5
+ *                 review: "Excellent work, completed ahead of schedule"
+ *                 job_id: JOB-0001
+ *             WithoutJob:
+ *               summary: General rating (no specific job)
+ *               value:
+ *                 rating: 4
+ *                 review: "Reliable and punctual"
+ *     responses:
+ *       201:
+ *         description: Rating added
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/TechnicianRatingResponse'
+ *                     - type: object
+ *                       properties:
+ *                         average_rating: { type: number, example: 4.25, description: Updated average }
+ *       400:
+ *         description: Invalid rating, job not closed, or job not assigned to technician
+ *       404:
+ *         description: Technician or job not found
+ *       409:
+ *         description: Already rated for this job
+ */
+router.post('/:id/ratings', protect, addRating);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/ratings/{ratingId}:
+ *   put:
+ *     summary: Update an existing rating
+ *     tags: [Technician Ratings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *       - in: path
+ *         name: ratingId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Rating ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateTechnicianRatingRequest'
+ *     responses:
+ *       200:
+ *         description: Rating updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/TechnicianRatingResponse'
+ *                     - type: object
+ *                       properties:
+ *                         average_rating: { type: number, description: Updated average }
+ *       404:
+ *         description: Rating not found
+ */
+router.put('/:id/ratings/:ratingId', protect, updateRating);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/technicians/{id}/ratings/{ratingId}:
+ *   delete:
+ *     summary: Delete a rating
+ *     tags: [Technician Ratings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Technician ID
+ *       - in: path
+ *         name: ratingId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Rating ID
+ *     responses:
+ *       200:
+ *         description: Rating deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 average_rating: { type: number, description: Updated average after deletion }
+ *       404:
+ *         description: Rating not found
+ */
+router.delete('/:id/ratings/:ratingId', protect, authorize('admin', 'manager'), deleteRating);
 
 module.exports = router;
