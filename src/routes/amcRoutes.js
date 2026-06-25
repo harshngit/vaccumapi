@@ -148,6 +148,11 @@ router.get('/', protect, getAmcContracts);
  *                 type: array
  *                 items: { type: string }
  *                 example: ["Preventive Maintenance", "Emergency Repairs", "Spare Parts"]
+ *               last_service_date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-03-15"
+ *                 description: Date of the most recent completed service visit
  *     responses:
  *       201:
  *         description: AMC contract created and confirmation email sent
@@ -237,6 +242,10 @@ router.get('/:id', protect, getAmcById);
  *               services:
  *                 type: array
  *                 items: { type: string }
+ *               last_service_date:
+ *                 type: string
+ *                 format: date
+ *                 description: Date of the most recent completed service visit (pass null to clear)
  *     responses:
  *       200:
  *         description: AMC updated

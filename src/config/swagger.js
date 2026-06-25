@@ -435,6 +435,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             value: { type: 'number', example: 450000 },
             status: { type: 'string', enum: ['Active','Expiring Soon','Expired'] },
             next_service_date: { type: 'string', format: 'date', nullable: true },
+            last_service_date: { type: 'string', format: 'date', nullable: true, description: 'Date of the most recent completed service visit' },
             renewal_reminder_days: { type: 'integer', example: 30 },
             days_left: { type: 'integer', example: 250, description: 'Computed: end_date - today. Negative if expired.' },
             services: { type: 'array', items: { type: 'string' }, example: ['HVAC Servicing', 'Filter Replacement', 'Emergency Support'] },
