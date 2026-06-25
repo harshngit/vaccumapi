@@ -14,6 +14,10 @@ const {
   addReportImage,
   addReportDocumentLink,
 } = require('../controllers/reportController');
+const {
+  getMonthlyVisitExcel,
+  getMonthlyVisitJSON,
+} = require('../controllers/visitReportController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 /**
@@ -253,6 +257,156 @@ router.get('/', protect, getReports);
  *         description: Validation error
  */
 router.post('/', protect, createReport);
+
+// ────────────────────────────────────────────────────────────
+// MONTHLY VISIT SCHEDULE REPORT
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/reports/visit-schedule:
+ *   get:
+ *     summary: Monthly Visit Schedule — JSON data with summary
+ *     description: |
+ *       Returns all scheduled visits for a given month/year with status breakdown
+ *       and pagination. Use this for dashboard views and tables.
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *         description: Month number (1–12)
+ *         example: 6
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Four-digit year
+ *         example: 2026
+ *       - in: query
+ *         name: technician_id
+ *         schema: { type: integer }
+ *         description: Filter by technician
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Raised, Assigned, In Progress, Closed]
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: [Service, AMC Visit, Breakdown, "Installation & Commissioning", Inspection]
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *     responses:
+ *       200:
+ *         description: Monthly visit schedule data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 month: { type: string, example: June }
+ *                 year: { type: integer, example: 2026 }
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     total_visits: { type: integer }
+ *                     completed: { type: integer }
+ *                     in_progress: { type: integer }
+ *                     assigned: { type: integer }
+ *                     pending: { type: integer }
+ *                     technicians_involved: { type: integer }
+ *                     clients_served: { type: integer }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       job_id: { type: string, example: JOB-0042 }
+ *                       title: { type: string }
+ *                       scheduled_date: { type: string, format: date }
+ *                       raised_date: { type: string, format: date }
+ *                       closed_date: { type: string, format: date, nullable: true }
+ *                       status: { type: string }
+ *                       category: { type: string }
+ *                       priority: { type: string }
+ *                       amount: { type: number }
+ *                       description: { type: string, nullable: true }
+ *                       client_name: { type: string }
+ *                       site_location: { type: string, nullable: true }
+ *                       technician_name: { type: string, nullable: true }
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
+ */
+router.get('/visit-schedule', protect, getMonthlyVisitJSON);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/reports/visit-schedule/excel:
+ *   get:
+ *     summary: Monthly Visit Schedule — Excel download
+ *     description: |
+ *       Generates and downloads an Excel (.xlsx) report of all scheduled visits
+ *       for the given month/year. Includes color-coded status, summary section,
+ *       and breakdown by visit type.
+ *
+ *       **Response:** Binary .xlsx file download (not JSON).
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *         description: Month number (1–12)
+ *         example: 6
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Four-digit year
+ *         example: 2026
+ *       - in: query
+ *         name: technician_id
+ *         schema: { type: integer }
+ *         description: Filter by technician
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Raised, Assigned, In Progress, Closed]
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: [Service, AMC Visit, Breakdown, "Installation & Commissioning", Inspection]
+ *     produces:
+ *       - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+ *     responses:
+ *       200:
+ *         description: Excel file download
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Invalid month value
+ */
+router.get('/visit-schedule/excel', protect, getMonthlyVisitExcel);
 
 // ────────────────────────────────────────────────────────────
 
