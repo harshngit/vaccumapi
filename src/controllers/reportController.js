@@ -1122,8 +1122,101 @@ const addReportDocumentLink = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// GET /api/reports/my
+// Returns reports created by the logged-in user's technician
+// ────────────────────────────────────────────────────────────
+const getMyReports = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const techResult = await pool.query(
+      'SELECT id, name FROM technicians WHERE user_id = $1 LIMIT 1', [userId]
+    );
+
+    if (techResult.rows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No technician profile linked to your account.',
+        data: [],
+        pagination: { total: 0, page: 1, limit: 50, total_pages: 0 },
+      });
+    }
+
+    const techId = techResult.rows[0].id;
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const { status, from_date, to_date } = req.query;
+
+    const conditions = ['r.technician_id = $1'];
+    const values     = [techId];
+
+    if (status) {
+      if (!['Pending', 'Approved', 'Rejected'].includes(status)) {
+        return sendError(res, 400, ERROR_CODES.INVALID_REPORT_STATUS,
+          'Invalid status. Allowed: Pending, Approved, Rejected.', { field: 'status' });
+      }
+      values.push(status);
+      conditions.push(`r.status = $${values.length}`);
+    }
+    if (from_date) { values.push(from_date); conditions.push(`r.report_date >= $${values.length}`); }
+    if (to_date)   { values.push(to_date);   conditions.push(`r.report_date <= $${values.length}`); }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+
+    const countResult = await pool.query(`SELECT COUNT(*) FROM reports r ${where}`, values);
+    const total = parseInt(countResult.rows[0].count);
+
+    values.push(limit, offset);
+    const result = await pool.query(
+      `SELECT r.id, r.job_id, j.title AS job_title, j.category AS job_category,
+         COALESCE(r.client_name, r.company_name, c.name) AS client_name,
+         c.address AS site_location, r.client_email,
+         r.po_number, r.location, r.serial_no,
+         r.title, r.findings, r.recommendations, r.remarks, r.comments,
+         r.status, r.report_date,
+         r.approved_by_user_id, r.approved_at,
+         r.vdt_representative_name, r.client_representative_name,
+         (SELECT COUNT(*) FROM report_images ri WHERE ri.report_id = r.id) AS image_count,
+         (SELECT COUNT(*) FROM technical_reports tr WHERE tr.report_id = r.id) AS technical_report_count,
+         (SELECT COUNT(*) FROM report_document_links rdl WHERE rdl.report_id = r.id) AS document_count,
+         r.created_at, r.updated_at
+       FROM reports r
+       LEFT JOIN jobs j ON j.id = r.job_id
+       LEFT JOIN clients c ON c.id = COALESCE(r.client_id, j.client_id)
+       ${where}
+       ORDER BY r.created_at DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values
+    );
+
+    const statusCounts = await pool.query(
+      `SELECT
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE status = 'Pending')  AS pending,
+         COUNT(*) FILTER (WHERE status = 'Approved') AS approved,
+         COUNT(*) FILTER (WHERE status = 'Rejected') AS rejected
+       FROM reports WHERE technician_id = $1`,
+      [techId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      technician: { id: techId, name: techResult.rows[0].name },
+      summary: statusCounts.rows[0],
+      data: result.rows,
+      pagination: { total, page, limit, total_pages: Math.ceil(total / limit) },
+    });
+
+  } catch (error) {
+    console.error('Get my reports error:', error);
+    return Errors.internalError(res);
+  }
+};
+
 module.exports = {
   getReports, createReport, getReportById,
   generateReportPdf, shareReport, updateReportStatus, addReportImage,
-  addReportDocumentLink,
+  addReportDocumentLink, getMyReports,
 };

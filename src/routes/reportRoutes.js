@@ -13,6 +13,7 @@ const {
   updateReportStatus,
   addReportImage,
   addReportDocumentLink,
+  getMyReports,
 } = require('../controllers/reportController');
 const {
   getMonthlyVisitExcel,
@@ -257,6 +258,96 @@ router.get('/', protect, getReports);
  *         description: Validation error
  */
 router.post('/', protect, createReport);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/reports/my:
+ *   get:
+ *     summary: Get my service reports (logged-in technician's reports)
+ *     description: |
+ *       Returns all service reports created by the technician linked to the
+ *       logged-in user. Includes summary counts (pending/approved/rejected),
+ *       pagination, and optional filters.
+ *
+ *       If the user has no linked technician profile, returns an empty array
+ *       with a message.
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Pending, Approved, Rejected]
+ *         description: Filter by report status
+ *       - in: query
+ *         name: from_date
+ *         schema: { type: string, format: date }
+ *         description: Filter reports from this date
+ *       - in: query
+ *         name: to_date
+ *         schema: { type: string, format: date }
+ *         description: Filter reports up to this date
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *     responses:
+ *       200:
+ *         description: My service reports
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 technician:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: integer }
+ *                     name: { type: string }
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     pending: { type: integer }
+ *                     approved: { type: integer }
+ *                     rejected: { type: integer }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string, example: RPT-0001 }
+ *                       job_id: { type: string, nullable: true }
+ *                       job_title: { type: string, nullable: true }
+ *                       job_category: { type: string, nullable: true }
+ *                       client_name: { type: string, nullable: true }
+ *                       site_location: { type: string, nullable: true }
+ *                       client_email: { type: string, nullable: true }
+ *                       po_number: { type: string, nullable: true }
+ *                       location: { type: string, nullable: true }
+ *                       title: { type: string }
+ *                       findings: { type: string, nullable: true }
+ *                       recommendations: { type: string, nullable: true }
+ *                       remarks: { type: string, nullable: true }
+ *                       status: { type: string, enum: [Pending, Approved, Rejected] }
+ *                       report_date: { type: string, format: date }
+ *                       image_count: { type: integer }
+ *                       technical_report_count: { type: integer }
+ *                       document_count: { type: integer }
+ *                       created_at: { type: string, format: date-time }
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/my', protect, getMyReports);
 
 // ────────────────────────────────────────────────────────────
 // MONTHLY VISIT SCHEDULE REPORT
