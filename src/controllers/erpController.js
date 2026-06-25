@@ -66,12 +66,17 @@ async function fetchFromERP(endpoint, params = {}) {
 const getQuotations = async (req, res) => {
   try {
     const {
+      page: rawPage,
+      limit: rawLimit,
       customer_id,
       from_date,
       to_date,
       status,
       search,
     } = req.query;
+
+    const page  = Math.max(1, parseInt(rawPage)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(rawLimit) || 50));
 
     const erpData = await fetchFromERP('QuotationAPI.ashx', {
       customer_id,
@@ -82,19 +87,25 @@ const getQuotations = async (req, res) => {
     });
 
     // Normalise: if ERP returns a bare array, wrap it; otherwise pass through
-    const records = Array.isArray(erpData)
+    let records = Array.isArray(erpData)
       ? erpData
       : erpData.data ?? erpData.quotations ?? erpData.records ?? (erpData.raw ? [] : [erpData]);
+
+    const total = records.length;
+    const total_pages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    records = records.slice(offset, offset + limit);
 
     return res.status(200).json({
       success : true,
       source  : 'erp',
-      count   : records.length,
       data    : records,
-      // Preserve any pagination meta the ERP sent back
-      ...(erpData.pagination   && { pagination  : erpData.pagination   }),
-      ...(erpData.totalRecords && { totalRecords: erpData.totalRecords }),
-      ...(erpData.raw          && { raw         : erpData.raw          }),
+      pagination: {
+        total,
+        page,
+        limit,
+        total_pages,
+      },
     });
   } catch (error) {
     console.error('ERP Quotation fetch error:', error.message);
@@ -181,31 +192,39 @@ const getQuotationById = async (req, res) => {
 const getCustomers = async (req, res) => {
   try {
     const {
-      page   = 1,
-      limit  = 50,
+      page: rawPage,
+      limit: rawLimit,
       search,
       status,
     } = req.query;
 
+    const page  = Math.max(1, parseInt(rawPage)  || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(rawLimit) || 50));
+
     const erpData = await fetchFromERP('CustomerAPI.ashx', {
-      page,
-      limit,
       search,
       status,
     });
 
-    const records = Array.isArray(erpData)
+    let records = Array.isArray(erpData)
       ? erpData
       : erpData.data ?? erpData.customers ?? erpData.records ?? (erpData.raw ? [] : [erpData]);
+
+    const total = records.length;
+    const total_pages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    records = records.slice(offset, offset + limit);
 
     return res.status(200).json({
       success : true,
       source  : 'erp',
-      count   : records.length,
       data    : records,
-      ...(erpData.pagination   && { pagination  : erpData.pagination   }),
-      ...(erpData.totalRecords && { totalRecords: erpData.totalRecords }),
-      ...(erpData.raw          && { raw         : erpData.raw          }),
+      pagination: {
+        total,
+        page,
+        limit,
+        total_pages,
+      },
     });
   } catch (error) {
     console.error('ERP Customer fetch error:', error.message);
