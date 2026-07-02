@@ -93,6 +93,8 @@ function groupQuotations(rawRows) {
         },
 
         priority       : row.EnquiryPriority,  // High | Medium | Low
+        category       : row.CategoryName || '',   // AMC Service | Spare | Accessories | etc.
+        sector         : row.Enq_Sector   !== 'Select' ? (row.Enq_Sector || '') : '',
         plant          : row.EnquiryPlantName,
         financial_year : row.FyName,
         currency       : row.CurrencyCode,
@@ -193,6 +195,7 @@ function handleErpError(error, res, context) {
  *   from_date    — YYYY-MM-DD  (filters by QuotDate >=)
  *   to_date      — YYYY-MM-DD  (filters by QuotDate <=)
  *   priority     — High | Medium | Low
+ *   category     — AMC Service | Spare | Accessories | etc. (partial match)
  *   prepared_by  — partial name match on PreparedByName
  *   entered_by   — partial name match on EntryUserName
  *   page         — default 1
@@ -208,6 +211,7 @@ const getQuotations = async (req, res) => {
       from_date,
       to_date,
       priority,
+      category,
       prepared_by,
       entered_by,
     } = req.query;
@@ -257,6 +261,13 @@ const getQuotations = async (req, res) => {
       );
     }
 
+    if (category) {
+      const q = category.toLowerCase();
+      quotations = quotations.filter(qt =>
+        qt.category?.toLowerCase().includes(q)
+      );
+    }
+
     if (prepared_by) {
       const q = prepared_by.toLowerCase();
       quotations = quotations.filter(qt =>
@@ -295,6 +306,7 @@ const getQuotations = async (req, res) => {
         from_date   : from_date   || null,
         to_date     : to_date     || null,
         priority    : priority    || null,
+        category    : category    || null,
         prepared_by : prepared_by || null,
         entered_by  : entered_by  || null,
       },

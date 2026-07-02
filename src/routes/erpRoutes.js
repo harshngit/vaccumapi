@@ -74,6 +74,11 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *             id:   { type: integer, example: 163 }
  *             name: { type: string,  example: "Agrocel Industries Private Limited" }
  *         priority:       { type: string, enum: [High, Medium, Low], example: "High" }
+ *         category:
+ *           type: string
+ *           description: Quotation category from ERP (AMC Service | Spare | Accessories | etc.)
+ *           example: "Spare"
+ *         sector:         { type: string, example: "" }
  *         plant:          { type: string, example: "VACUUM" }
  *         financial_year: { type: string, example: "26-27" }
  *         currency:       { type: string, example: "Rs" }
@@ -152,6 +157,7 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *             from_date:   { type: string, nullable: true }
  *             to_date:     { type: string, nullable: true }
  *             priority:    { type: string, nullable: true }
+ *             category:    { type: string, nullable: true }
  *             prepared_by: { type: string, nullable: true }
  *             entered_by:  { type: string, nullable: true }
  *
@@ -292,6 +298,14 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *           enum: [High, Medium, Low]
  *         description: Filter by enquiry priority
  *         example: "High"
+ *       - in: query
+ *         name: category
+ *         schema: { type: string }
+ *         description: >
+ *           Partial match on quotation category (from ERP `CategoryName` field).
+ *           Common values: `AMC Service`, `Spare`, `Accessories`.
+ *           Case-insensitive — `spare` matches "Spare Parts".
+ *         example: "AMC Service"
  *       - in: query
  *         name: prepared_by
  *         schema: { type: string }
