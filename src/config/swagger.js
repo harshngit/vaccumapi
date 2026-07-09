@@ -19,12 +19,12 @@ Use the **Authorize** button (top right) and enter your JWT token as:
 2. Use that \`file_url\` in **POST /api/jobs/:id/images** or **POST /api/reports/:id/images**
 
 ### Base URLs
-- **Production:** https://apivdti.asynk.in/
+- **Production:** https://api.vdtil.com/
 - **Local:** http://localhost:3000
       `,
     },
     servers: [
-      { url: 'https://apivdti.asynk.in/', description: '🚀 Production SSH' },
+      { url: 'https://api.vdtil.com/', description: '🚀 Production SSH' },
       { url: 'http://localhost:3000',                        description: '💻 Local Dev' },
     ],
     components: {
@@ -125,7 +125,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
                   document_type:   { type: 'string', enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'], example: 'Aadhaar Card' },
                   document_name:   { type: 'string', example: 'Ravi Aadhaar Front' },
                   file_name:       { type: 'string', example: 'aadhaar_front.jpg' },
-                  file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg' },
+                  file_url:        { type: 'string', example: 'https://api.vdtil.com/uploads/1714012345678_aadhaar_front.jpg' },
                   mime_type:       { type: 'string', default: 'application/pdf' },
                   file_size_bytes: { type: 'integer' },
                   expiry_date:     { type: 'string', format: 'date', example: '2026-12-31' },
@@ -239,7 +239,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             document_type:   { type: 'string', enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'] },
             document_name:   { type: 'string', example: 'Ravi Aadhaar Front' },
             file_name:       { type: 'string', example: 'aadhaar_front.jpg' },
-            file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg' },
+            file_url:        { type: 'string', example: 'https://api.vdtil.com/uploads/1714012345678_aadhaar_front.jpg' },
             mime_type:       { type: 'string', example: 'image/jpeg' },
             file_size_bytes: { type: 'integer', nullable: true },
             expiry_date:     { type: 'string', format: 'date', nullable: true, example: '2026-12-31' },
@@ -259,7 +259,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             document_type:   { type: 'string', enum: ['Aadhaar Card','Technician Photo','WC Policy','Medical Insurance Policy','Other'], example: 'Aadhaar Card' },
             document_name:   { type: 'string', example: 'Ravi Aadhaar Front' },
             file_name:       { type: 'string', example: 'aadhaar_front.jpg', description: 'Original filename from upload response' },
-            file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg', description: 'URL from upload response' },
+            file_url:        { type: 'string', example: 'https://api.vdtil.com/uploads/1714012345678_aadhaar_front.jpg', description: 'URL from upload response' },
             mime_type:       { type: 'string', default: 'application/pdf' },
             file_size_bytes: { type: 'integer' },
             expiry_date:     { type: 'string', format: 'date', example: '2026-12-31', description: 'Optional. Track document expiry.' },
@@ -280,7 +280,7 @@ Use the **Authorize** button (top right) and enter your JWT token as:
             id:              { type: 'integer' },
             file_name:       { type: 'string', example: 'aadhaar_front.jpg' },
             stored_name:     { type: 'string' },
-            file_url:        { type: 'string', example: 'https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg' },
+            file_url:        { type: 'string', example: 'https://api.vdtil.com/uploads/1714012345678_aadhaar_front.jpg' },
             mime_type:       { type: 'string', example: 'image/jpeg' },
             file_size_bytes: { type: 'integer' },
             uploaded_at:     { type: 'string', format: 'date-time' },

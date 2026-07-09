@@ -176,13 +176,13 @@ router.get('/', protect, getTechnicians);
  *                   - document_type: Aadhaar Card
  *                     document_name: Ravi Aadhaar Front
  *                     file_name: aadhaar_front.jpg
- *                     file_url: https://apivdti.asynk.in/uploads/1714012345678_aadhaar_front.jpg
+ *                     file_url: https://api.vdtil.com/uploads/1714012345678_aadhaar_front.jpg
  *                     mime_type: image/jpeg
  *                     expiry_date: "2030-12-31"
  *                   - document_type: WC Policy
  *                     document_name: WC Policy 2024-25
  *                     file_name: wc_policy.pdf
- *                     file_url: https://apivdti.asynk.in/uploads/1714012345679_wc_policy.pdf
+ *                     file_url: https://api.vdtil.com/uploads/1714012345679_wc_policy.pdf
  *                     mime_type: application/pdf
  *                     expiry_date: "2025-03-31"
  *                     notes: Renewal due March 2025
