@@ -61,13 +61,13 @@ router.post('/register', register);
  *             LoginWithEmail:
  *               summary: Login with email
  *               value:
- *                 email: john@example.com
- *                 password: password123
+ *                 email: admin@vdti.com
+ *                 password: "Vdti@1234"
  *             LoginWithPhone:
  *               summary: Login with phone
  *               value:
- *                 phone_number: "+911234567890"
- *                 password: password123
+ *                 phone_number: "+919876543210"
+ *                 password: "Vdti@1234"
  *     responses:
  *       200:
  *         description: Login successful

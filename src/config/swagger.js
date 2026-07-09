@@ -37,20 +37,20 @@ Use the **Authorize** button (top right) and enter your JWT token as:
         RegisterRequest: {
           type: 'object', required: ['first_name', 'last_name', 'password', 'role'],
           properties: {
-            first_name: { type: 'string', example: 'John' },
-            last_name:  { type: 'string', example: 'Doe' },
-            email:      { type: 'string', format: 'email', example: 'john@example.com' },
-            phone_number: { type: 'string', example: '+911234567890' },
-            password:   { type: 'string', minLength: 6, example: 'password123' },
-            role:       { type: 'string', enum: ['admin','manager','engineer','technician','labour'] },
+            first_name:   { type: 'string', example: 'Rahul' },
+            last_name:    { type: 'string', example: 'Mehta' },
+            email:        { type: 'string', format: 'email', example: 'rahul.mehta@vdti.com' },
+            phone_number: { type: 'string', example: '+919876543210' },
+            password:     { type: 'string', minLength: 6, example: 'Vdti@1234' },
+            role:         { type: 'string', enum: ['admin','manager','engineer','technician','labour'], example: 'technician' },
           },
         },
         LoginRequest: {
           type: 'object', required: ['password'],
           properties: {
-            email:        { type: 'string', format: 'email', example: 'john@example.com' },
-            phone_number: { type: 'string', example: '+911234567890' },
-            password:     { type: 'string', example: 'password123' },
+            email:        { type: 'string', format: 'email', example: 'admin@vdti.com' },
+            phone_number: { type: 'string', example: '+919876543210' },
+            password:     { type: 'string', example: 'Vdti@1234' },
           },
         },
 

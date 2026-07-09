@@ -347,15 +347,8 @@ const getQuotationById = async (req, res) => {
 };
 
 // ─── GET /api/erp/customers ───────────────────────────────────
-/**
- * Fetch all customers (or filter by query params) from the ERP.
- *
- * Supported query params forwarded to ERP:
- *   - page     {integer}  page number
- *   - limit    {integer}  records per page
- *   - search   {string}   name / phone / email
- *   - status   {string}   Active | Inactive
- */
+// ERP does not support server-side search/status filtering.
+// We fetch all records and filter client-side.
 const getCustomers = async (req, res) => {
   try {
     const {
@@ -368,51 +361,60 @@ const getCustomers = async (req, res) => {
     const page  = Math.max(1, parseInt(rawPage)  || 1);
     const limit = Math.min(100, Math.max(1, parseInt(rawLimit) || 50));
 
-    const erpData = await fetchFromERP('CustomerAPI.ashx', {
-      search,
-      status,
-    });
+    // Fetch everything — no params passed since ERP ignores them
+    const erpData = await fetchFromERP('CustomerAPI.ashx');
 
     let records = Array.isArray(erpData)
       ? erpData
       : erpData.data ?? erpData.customers ?? erpData.records ?? (erpData.raw ? [] : [erpData]);
 
-    const total = records.length;
-    const total_pages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
-    records = records.slice(offset, offset + limit);
+    // ── Client-side filters ────────────────────────────────────
+
+    if (search) {
+      const q = search.toLowerCase();
+      // Search across every string value in the customer object —
+      // works regardless of what the ERP field names are
+      records = records.filter(c =>
+        Object.values(c).some(v => typeof v === 'string' && v.toLowerCase().includes(q))
+      );
+    }
+
+    if (status) {
+      const s = status.toLowerCase();
+      // Try common ERP status field names
+      records = records.filter(c => {
+        const val = (
+          c.Status ?? c.CustomerStatus ?? c.IsActive ?? c.status ?? ''
+        ).toString().toLowerCase();
+        return val.includes(s);
+      });
+    }
+
+    // ── Paginate ───────────────────────────────────────────────
+    const total       = records.length;
+    const total_pages = Math.ceil(total / limit) || 1;
+    const offset      = (page - 1) * limit;
+    const pageData    = records.slice(offset, offset + limit);
 
     return res.status(200).json({
       success : true,
       source  : 'erp',
-      data    : records,
+      data    : pageData,
       pagination: {
         total,
         page,
         limit,
         total_pages,
+        has_next : page < total_pages,
+        has_prev : page > 1,
+      },
+      filters_applied: {
+        search : search || null,
+        status : status || null,
       },
     });
   } catch (error) {
-    console.error('ERP Customer fetch error:', error.message);
-
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      return res.status(504).json({
-        success    : false,
-        error_code : 'ERP_TIMEOUT',
-        message    : 'The ERP server did not respond in time. Please try again.',
-      });
-    }
-
-    if (error.erpStatus) {
-      return res.status(502).json({
-        success    : false,
-        error_code : 'ERP_ERROR',
-        message    : `ERP returned an error (HTTP ${error.erpStatus}). Please check the ERP server.`,
-      });
-    }
-
-    return Errors.internalError(res);
+    return handleErpError(error, res, 'Customer list');
   }
 };
 
