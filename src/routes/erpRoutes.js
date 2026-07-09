@@ -10,6 +10,9 @@ const {
   getQuotationById,
   getCustomers,
   getCustomerById,
+  syncQuotations,
+  getLocalQuotations,
+  getLocalQuotationById,
 } = require('../controllers/erpController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -224,14 +227,21 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  * tags:
  *   - name: ERP – Quotations
  *     description: >
- *       Read-only proxy to the external ERP Quotation API
- *       (`http://203.192.195.67/erp/QuotationAPI.ashx`).
- *       All responses are forwarded as-is from the ERP with a normalised wrapper.
+ *       Live proxy to the external ERP Quotation API (`QuotationAPI.ashx`).
+ *       Fetches directly from ERP on every request. Use for real-time data.
  *   - name: ERP – Customers
  *     description: >
- *       Read-only proxy to the external ERP Customer API
- *       (`http://203.192.195.67/erp/CustomerAPI.ashx`).
- *       All responses are forwarded as-is from the ERP with a normalised wrapper.
+ *       Live proxy to the external ERP Customer API (`CustomerAPI.ashx`).
+ *       Fetches directly from ERP on every request.
+ *   - name: ERP – Sync & Local DB
+ *     description: |
+ *       **Two-step workflow:**
+ *       1. `POST /api/erp/sync/quotations` — Pull all quotations from ERP into local DB
+ *       2. `GET  /api/erp/local/quotations` — Query local DB fast with full filters
+ *
+ *       Local DB queries are much faster than live ERP calls and support
+ *       SQL-level filtering (ILIKE, date ranges, client_id FK join, etc.).
+ *       Run sync periodically (or on-demand) to keep local data fresh.
  */
 
 // ─────────────────────────────────────────────────────────────
@@ -628,5 +638,286 @@ router.get('/customers', protect, getCustomers);
  *         description: Internal server error
  */
 router.get('/customers/:id', protect, getCustomerById);
+
+// ─────────────────────────────────────────────────────────────
+// SYNC ROUTE
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/erp/sync/quotations:
+ *   post:
+ *     summary: Sync all ERP quotations into the local database
+ *     description: |
+ *       Pulls every quotation from the ERP (`QuotationAPI.ashx`), groups the flat
+ *       line-item rows, then **upserts** them into the local `erp_quotations` and
+ *       `erp_quotation_items` tables.
+ *
+ *       ### What happens on each sync
+ *       | Situation | Action |
+ *       |---|---|
+ *       | Quotation not in local DB | **INSERT** |
+ *       | Quotation already in local DB | **UPDATE** all fields + `synced_at` |
+ *       | Line items | Old items deleted and re-inserted fresh |
+ *       | ERP customer matches `clients.erp_customer_id` | `client_id` FK set automatically |
+ *       | No matching local client | `client_id` = NULL |
+ *
+ *       > **Prerequisite:** Run `db/queries/009_erp_quotations.sql` on the database first.
+ *
+ *       > **Access:** Admin and Manager only.
+ *     tags: [ERP – Sync & Local DB]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync completed (check `failed` count for partial errors)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:     { type: boolean, example: true }
+ *                 message:     { type: string,  example: "Sync complete. 38 inserted, 4 updated, 0 failed." }
+ *                 total:       { type: integer, example: 42, description: "Total quotations found in ERP" }
+ *                 inserted:    { type: integer, example: 38, description: "New quotations added to local DB" }
+ *                 updated:     { type: integer, example: 4,  description: "Existing quotations refreshed" }
+ *                 failed:      { type: integer, example: 0,  description: "Quotations that could not be saved" }
+ *                 duration_ms: { type: integer, example: 1243 }
+ *                 errors:
+ *                   type: array
+ *                   description: Present only when failed > 0
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       quot_id:  { type: integer }
+ *                       quot_no:  { type: string }
+ *                       error:    { type: string }
+ *             example:
+ *               success: true
+ *               message: "Sync complete. 38 inserted, 4 updated, 0 failed."
+ *               total: 42
+ *               inserted: 38
+ *               updated: 4
+ *               failed: 0
+ *               duration_ms: 1243
+ *       401:
+ *         description: Unauthorised
+ *       403:
+ *         description: Forbidden — admin or manager role required
+ *       502:
+ *         description: ERP returned an HTTP error
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErpErrorResponse' }
+ *       504:
+ *         description: ERP did not respond within 15 seconds
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErpErrorResponse' }
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/sync/quotations', protect, authorize('admin', 'manager'), syncQuotations);
+
+// ─────────────────────────────────────────────────────────────
+// LOCAL DB QUOTATION ROUTES
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/erp/local/quotations:
+ *   get:
+ *     summary: Get synced quotations from local database (fast, with full filters)
+ *     description: |
+ *       Reads from the local `erp_quotations` table — much faster than calling
+ *       the ERP live. Use `POST /api/erp/sync/quotations` to refresh data first.
+ *
+ *       Returns the **exact same object shape** as `GET /api/erp/quotations`
+ *       so the frontend can switch between live ERP and local DB with no code change.
+ *       The only difference is `source: "local_db"` and an extra `client_id` field
+ *       (your local client FK, `null` if the ERP customer has no local match).
+ *
+ *       ### Filters (all optional)
+ *       | Param | Description |
+ *       |---|---|
+ *       | `search` | Searches quot_no, enquiry_no, customer name, subject, kind_attention |
+ *       | `status` | `Open` / `Approved` / `Cancelled` / `Rejected` (alias for Cancelled) |
+ *       | `from_date` | QuotDate ≥ this date (YYYY-MM-DD) |
+ *       | `to_date` | QuotDate ≤ this date (YYYY-MM-DD) |
+ *       | `priority` | `High` / `Medium` / `Low` |
+ *       | `category` | Partial match — `AMC Service`, `Spare`, `Accessories`, etc. |
+ *       | `prepared_by` | Partial name match |
+ *       | `entered_by` | Partial name match |
+ *       | `client_id` | Filter by local client ID (only quotations linked to that client) |
+ *       | `page` / `limit` | Pagination (default 1 / 20, max limit 100) |
+ *     tags: [ERP – Sync & Local DB]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: Search across quot_no, enquiry_no, customer name, subject, kind_attention
+ *         example: "Alembic"
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Open, Approved, Cancelled, Rejected]
+ *         example: "Approved"
+ *       - in: query
+ *         name: from_date
+ *         schema: { type: string, format: date }
+ *         example: "2026-01-01"
+ *       - in: query
+ *         name: to_date
+ *         schema: { type: string, format: date }
+ *         example: "2026-07-31"
+ *       - in: query
+ *         name: priority
+ *         schema: { type: string, enum: [High, Medium, Low] }
+ *         example: "High"
+ *       - in: query
+ *         name: category
+ *         schema: { type: string }
+ *         description: Partial match — AMC Service | Spare | Accessories
+ *         example: "Accessories"
+ *       - in: query
+ *         name: prepared_by
+ *         schema: { type: string }
+ *         example: "Shruti"
+ *       - in: query
+ *         name: entered_by
+ *         schema: { type: string }
+ *         example: "Gaurangi"
+ *       - in: query
+ *         name: client_id
+ *         schema: { type: integer }
+ *         description: Filter by local client ID (from clients table)
+ *         example: 13
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *     responses:
+ *       200:
+ *         description: Paginated list of quotations from local database
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErpQuotationListResponse'
+ *             example:
+ *               success: true
+ *               source: "local_db"
+ *               data:
+ *                 - quot_id: 3496
+ *                   quot_no: "Q-V-262700054"
+ *                   enquiry_no: "ENQ262700230"
+ *                   date: "2026-07-09"
+ *                   subject: "Quotation for Accessories of Italvacuum Pump model VVC"
+ *                   customer:
+ *                     id: 13
+ *                     code: "C10013"
+ *                     name: "Alembic Pharmaceuticals Limited"
+ *                   client_id: 13
+ *                   priority: "High"
+ *                   category: "Accessories"
+ *                   net_total: 425500
+ *                   currency: "Rs"
+ *                   prepared_by: "ShrutiT"
+ *                   entered_by: "Gaurangi N"
+ *                   quotation_status: "Approved"
+ *                   items:
+ *                     - line_id: 17849
+ *                       item_code: "FVVCCPWAF"
+ *                       description: "VVC Control Panel with Autoflushing System"
+ *                       qty: 1
+ *                       unit: "NOS"
+ *                       rate: 425500
+ *                       total: 425500
+ *                   synced_at: "2026-07-10T08:30:00Z"
+ *               pagination:
+ *                 total: 42
+ *                 page: 1
+ *                 limit: 20
+ *                 total_pages: 3
+ *                 has_next: true
+ *                 has_prev: false
+ *               filters_applied:
+ *                 search: null
+ *                 status: null
+ *                 from_date: null
+ *                 to_date: null
+ *                 priority: null
+ *                 category: null
+ *                 prepared_by: null
+ *                 entered_by: null
+ *                 client_id: null
+ *       401:
+ *         description: Unauthorised
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/local/quotations', protect, getLocalQuotations);
+
+/**
+ * @swagger
+ * /api/erp/local/quotations/{id}:
+ *   get:
+ *     summary: Get a single synced quotation from local database by quot_id
+ *     tags: [ERP – Sync & Local DB]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: ERP quot_id (e.g. 3496)
+ *         example: 3496
+ *     responses:
+ *       200:
+ *         description: Single quotation with all line items
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErpQuotationSingleResponse'
+ *             example:
+ *               success: true
+ *               source: "local_db"
+ *               data:
+ *                 quot_id: 3496
+ *                 quot_no: "Q-V-262700054"
+ *                 client_id: 13
+ *                 customer:
+ *                   id: 13
+ *                   code: "C10013"
+ *                   name: "Alembic Pharmaceuticals Limited"
+ *                 net_total: 425500
+ *                 quotation_status: "Approved"
+ *                 synced_at: "2026-07-10T08:30:00Z"
+ *                 items:
+ *                   - item_code: "FVVCCPWAF"
+ *                     description: "VVC Control Panel with Autoflushing System"
+ *                     qty: 1
+ *                     rate: 425500
+ *                     total: 425500
+ *       404:
+ *         description: Quotation not found in local DB
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErpErrorResponse' }
+ *             example:
+ *               success: false
+ *               error_code: "QUOTATION_NOT_FOUND"
+ *               message: "Quotation with ID '9999' was not found in the local database. Try syncing first."
+ *       401:
+ *         description: Unauthorised
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/local/quotations/:id', protect, getLocalQuotationById);
 
 module.exports = router;
