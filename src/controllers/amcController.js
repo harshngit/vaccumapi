@@ -36,6 +36,27 @@ const formatDate = (d) => d
   ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
   : '—';
 
+// ─── Helper: the 6 individual service date fields ────────────
+const SERVICE_DATE_FIELDS = [
+  'service_date_1', 'service_date_2', 'service_date_3',
+  'service_date_4', 'service_date_5', 'service_date_6',
+];
+
+// ─── Helper: validate service_date_1..6 against visit_count ──
+// If visit_count is N, service_date_1 through service_date_N must all be present.
+const validateServiceDates = (visitCount, serviceDates) => {
+  if (!visitCount) return null;
+  if (visitCount > SERVICE_DATE_FIELDS.length) {
+    return { error: `visit_count cannot exceed ${SERVICE_DATE_FIELDS.length} — only ${SERVICE_DATE_FIELDS.length} service date fields are supported.` };
+  }
+  const missing = [];
+  for (let i = 1; i <= visitCount; i++) {
+    const field = `service_date_${i}`;
+    if (!serviceDates[field]) missing.push(field);
+  }
+  return missing.length ? { missing } : null;
+};
+
 // ─── Email: AMC Created ───────────────────────────────────────
 const buildAmcCreatedEmail = (contract) => `
 <!DOCTYPE html>
@@ -438,6 +459,8 @@ const getAmcContracts = async (req, res) => {
          a.status, a.next_service_date, a.renewal_reminder_days,
          a.visit_count, a.pumps_count, a.per_pump_price, a.total_price, a.gst_percent,
          a.last_service_date,
+         a.service_date_1, a.service_date_2, a.service_date_3,
+         a.service_date_4, a.service_date_5, a.service_date_6,
          (a.end_date - CURRENT_DATE) AS days_left,
          a.created_by_user_id, a.created_at, a.updated_at
        FROM amc_contracts a
@@ -481,7 +504,10 @@ const createAmcContract = async (req, res) => {
       services = [], po_number,
       visit_count, pumps_count, per_pump_price, total_price, gst_percent,
       last_service_date,
+      service_date_1, service_date_2, service_date_3,
+      service_date_4, service_date_5, service_date_6,
     } = req.body;
+    const serviceDates = { service_date_1, service_date_2, service_date_3, service_date_4, service_date_5, service_date_6 };
 
     const missing = [];
     if (!client_id)  missing.push('client_id');
@@ -503,6 +529,18 @@ const createAmcContract = async (req, res) => {
     if (renewal_reminder_days < 1 || renewal_reminder_days > 365) {
       return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
         'renewal_reminder_days must be between 1 and 365.');
+    }
+
+    if (visit_count !== undefined && visit_count !== null && visit_count !== '') {
+      const serviceDateCheck = validateServiceDates(parseInt(visit_count), serviceDates);
+      if (serviceDateCheck) {
+        if (serviceDateCheck.error) {
+          return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, serviceDateCheck.error);
+        }
+        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+          `visit_count is ${visit_count}, so the following service dates are required: ${serviceDateCheck.missing.join(', ')}.`,
+          { missing_fields: serviceDateCheck.missing });
+      }
     }
 
     // ── Validate po_number uniqueness if provided ─────────────
@@ -535,8 +573,10 @@ const createAmcContract = async (req, res) => {
          (id, client_id, title, start_date, end_date, value, status,
           next_service_date, renewal_reminder_days, po_number, created_by_user_id,
           visit_count, pumps_count, per_pump_price, total_price, gst_percent,
-          last_service_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          last_service_date,
+          service_date_1, service_date_2, service_date_3,
+          service_date_4, service_date_5, service_date_6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING *`,
       [
         amcId, client_id, title.trim(), start_date, end_date,
@@ -549,6 +589,8 @@ const createAmcContract = async (req, res) => {
         total_price    !== undefined && total_price    !== null && total_price    !== '' ? parseFloat(total_price)    : null,
         gst_percent    !== undefined && gst_percent    !== null && gst_percent    !== '' ? parseFloat(gst_percent)    : null,
         last_service_date || null,
+        service_date_1 || null, service_date_2 || null, service_date_3 || null,
+        service_date_4 || null, service_date_5 || null, service_date_6 || null,
       ]
     );
 
@@ -655,6 +697,8 @@ const getAmcById = async (req, res) => {
          a.status, a.next_service_date, a.renewal_reminder_days,
          a.visit_count, a.pumps_count, a.per_pump_price, a.total_price, a.gst_percent,
          a.last_service_date,
+         a.service_date_1, a.service_date_2, a.service_date_3,
+         a.service_date_4, a.service_date_5, a.service_date_6,
          (a.end_date - CURRENT_DATE) AS days_left,
          a.created_by_user_id, a.created_at, a.updated_at
        FROM amc_contracts a
@@ -701,6 +745,8 @@ const updateAmcContract = async (req, res) => {
       services, po_number,
       visit_count, pumps_count, per_pump_price, total_price, gst_percent,
       last_service_date,
+      service_date_1, service_date_2, service_date_3,
+      service_date_4, service_date_5, service_date_6,
     } = req.body;
 
     const newTitle           = title                ? title.trim()               : cur.title;
@@ -718,9 +764,31 @@ const updateAmcContract = async (req, res) => {
     const newTotalPrice    = total_price    !== undefined ? (numOrNull(total_price)    === null ? null : parseFloat(total_price))    : cur.total_price;
     const newGstPercent    = gst_percent    !== undefined ? (numOrNull(gst_percent)    === null ? null : parseFloat(gst_percent))    : cur.gst_percent;
 
+    const newServiceDate1 = service_date_1 !== undefined ? (service_date_1 || null) : cur.service_date_1;
+    const newServiceDate2 = service_date_2 !== undefined ? (service_date_2 || null) : cur.service_date_2;
+    const newServiceDate3 = service_date_3 !== undefined ? (service_date_3 || null) : cur.service_date_3;
+    const newServiceDate4 = service_date_4 !== undefined ? (service_date_4 || null) : cur.service_date_4;
+    const newServiceDate5 = service_date_5 !== undefined ? (service_date_5 || null) : cur.service_date_5;
+    const newServiceDate6 = service_date_6 !== undefined ? (service_date_6 || null) : cur.service_date_6;
+
     if (newReminderDays < 1 || newReminderDays > 365) {
       return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
         'renewal_reminder_days must be between 1 and 365.');
+    }
+
+    if (newVisitCount !== undefined && newVisitCount !== null) {
+      const serviceDateCheck = validateServiceDates(newVisitCount, {
+        service_date_1: newServiceDate1, service_date_2: newServiceDate2, service_date_3: newServiceDate3,
+        service_date_4: newServiceDate4, service_date_5: newServiceDate5, service_date_6: newServiceDate6,
+      });
+      if (serviceDateCheck) {
+        if (serviceDateCheck.error) {
+          return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, serviceDateCheck.error);
+        }
+        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+          `visit_count is ${newVisitCount}, so the following service dates are required: ${serviceDateCheck.missing.join(', ')}.`,
+          { missing_fields: serviceDateCheck.missing });
+      }
     }
 
     // Check PO uniqueness if changing
@@ -745,13 +813,18 @@ const updateAmcContract = async (req, res) => {
        SET title=$1, end_date=$2, value=$3, status=$4,
            next_service_date=$5, renewal_reminder_days=$6, po_number=$7,
            visit_count=$8, pumps_count=$9, per_pump_price=$10,
-           total_price=$11, gst_percent=$12, last_service_date=$13
-       WHERE id=$14
+           total_price=$11, gst_percent=$12, last_service_date=$13,
+           service_date_1=$14, service_date_2=$15, service_date_3=$16,
+           service_date_4=$17, service_date_5=$18, service_date_6=$19
+       WHERE id=$20
        RETURNING *`,
       [newTitle, newEndDate, newValue, newStatus,
        newNextServiceDate, newReminderDays, newPoNumber || null,
        newVisitCount, newPumpsCount, newPerPumpPrice, newTotalPrice, newGstPercent,
-       newLastServiceDate, id]
+       newLastServiceDate,
+       newServiceDate1, newServiceDate2, newServiceDate3,
+       newServiceDate4, newServiceDate5, newServiceDate6,
+       id]
     );
 
     if (Array.isArray(services)) {

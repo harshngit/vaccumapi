@@ -82,7 +82,11 @@ router.get('/', protect, getAmcContracts);
  *     description: |
  *       Creates the contract and sends a confirmation email to the client.
  *       The cron job will send a renewal reminder email when expiry is within
- *       renewal_reminder_days, and a 10-day service reminder based on next_service_date.
+ *       renewal_reminder_days, and a 10-day service reminder based on next_service_date
+ *       as well as each of service_date_1..service_date_6 that is set.
+ *       If visit_count is provided, service_date_1 through service_date_<visit_count>
+ *       are required (e.g. visit_count=1 requires service_date_1; visit_count=3 requires
+ *       service_date_1, service_date_2 and service_date_3).
  *     tags: [AMC Contracts]
  *     security:
  *       - bearerAuth: []
@@ -153,6 +157,30 @@ router.get('/', protect, getAmcContracts);
  *                 format: date
  *                 example: "2025-03-15"
  *                 description: Date of the most recent completed service visit
+ *               service_date_1:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 1 (required when visit_count >= 1)
+ *               service_date_2:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 2 (required when visit_count >= 2)
+ *               service_date_3:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 3 (required when visit_count >= 3)
+ *               service_date_4:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 4 (required when visit_count >= 4)
+ *               service_date_5:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 5 (required when visit_count >= 5)
+ *               service_date_6:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 6 (required when visit_count >= 6)
  *     responses:
  *       201:
  *         description: AMC contract created and confirmation email sent
@@ -246,6 +274,30 @@ router.get('/:id', protect, getAmcById);
  *                 type: string
  *                 format: date
  *                 description: Date of the most recent completed service visit (pass null to clear)
+ *               service_date_1:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 1 (required when visit_count >= 1)
+ *               service_date_2:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 2 (required when visit_count >= 2)
+ *               service_date_3:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 3 (required when visit_count >= 3)
+ *               service_date_4:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 4 (required when visit_count >= 4)
+ *               service_date_5:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 5 (required when visit_count >= 5)
+ *               service_date_6:
+ *                 type: string
+ *                 format: date
+ *                 description: Scheduled date for service visit 6 (required when visit_count >= 6)
  *     responses:
  *       200:
  *         description: AMC updated

@@ -118,17 +118,71 @@ const runServiceDateReminderCheck = async () => {
 };
 
 // ────────────────────────────────────────────────────────────
-// Start both jobs
+// 3. Numbered Service Date Reminders (service_date_1..6)
+//    Same 10-days-before logic as next_service_date, fired once
+//    per configured visit date.
+// ────────────────────────────────────────────────────────────
+const runNumberedServiceDateReminderCheck = async () => {
+  console.log('[AMC Cron] Running service_date_1..6 reminder check…');
+  try {
+    const unionParts = [1, 2, 3, 4, 5, 6].map(n => `
+      SELECT
+        a.id, a.title, a.po_number,
+        a.service_date_${n} AS next_service_date, ${n} AS service_number,
+        c.name  AS client_name,
+        c.email AS client_email
+      FROM amc_contracts a
+      LEFT JOIN clients c ON c.id = a.client_id
+      WHERE a.service_date_${n} IS NOT NULL
+        AND (a.service_date_${n} - CURRENT_DATE) = 10
+        AND a.status != 'Expired'
+    `).join(' UNION ALL ');
+
+    const result = await pool.query(unionParts);
+
+    for (const amc of result.rows) {
+      // ── WS notification ────────────────────────────────────
+      await notify({
+        event:       'amc_service_upcoming',
+        title:       `Upcoming Service ${amc.service_number} Reminder`,
+        message:     `${amc.id} — ${amc.title} (${amc.client_name}) — service ${amc.service_number} in 10 days on ${amc.next_service_date}`,
+        entity_type: 'amc',
+        entity_id:   amc.id,
+        roles:       ['admin', 'manager'],
+      }, wsManager);
+
+      // ── Email to client ────────────────────────────────────
+      if (amc.client_email) {
+        const html = buildServiceReminderEmail(amc);
+        await sendNotification('amc_service_reminder', {
+          to:      amc.client_email,
+          subject: `🔔 Service ${amc.service_number} Reminder — Scheduled Visit in 10 Days | Electromech Engineering`,
+          html,
+        });
+        console.log(`[AMC Cron] Service ${amc.service_number} reminder sent to ${amc.client_email} for ${amc.id}`);
+      }
+    }
+
+    console.log(`[AMC Cron] service_date_1..6 reminder check done. Found ${result.rows.length} upcoming services.`);
+  } catch (err) {
+    console.error('[AMC Cron] Numbered service reminder error:', err.message);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// Start all jobs
 // ────────────────────────────────────────────────────────────
 const startAmcExpiryJob = () => {
-  // Run both immediately on startup
+  // Run all immediately on startup
   runRenewalReminderCheck();
   runServiceDateReminderCheck();
+  runNumberedServiceDateReminderCheck();
 
   // Then repeat every 24 hours
   setInterval(() => {
     runRenewalReminderCheck();
     runServiceDateReminderCheck();
+    runNumberedServiceDateReminderCheck();
   }, 24 * 60 * 60 * 1000);
 };
 
