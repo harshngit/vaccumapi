@@ -458,7 +458,7 @@ const getAmcContracts = async (req, res) => {
          a.title, a.po_number, a.start_date, a.end_date, a.value,
          a.status, a.next_service_date, a.renewal_reminder_days,
          a.visit_count, a.pumps_count, a.per_pump_price, a.total_price, a.gst_percent,
-         a.last_service_date,
+         a.last_service_date, a.breakdown_visit_count,
          a.service_date_1, a.service_date_2, a.service_date_3,
          a.service_date_4, a.service_date_5, a.service_date_6,
          (a.end_date - CURRENT_DATE) AS days_left,
@@ -503,7 +503,7 @@ const createAmcContract = async (req, res) => {
       next_service_date, renewal_reminder_days = 30,
       services = [], po_number,
       visit_count, pumps_count, per_pump_price, total_price, gst_percent,
-      last_service_date,
+      last_service_date, breakdown_visit_count,
       service_date_1, service_date_2, service_date_3,
       service_date_4, service_date_5, service_date_6,
     } = req.body;
@@ -575,8 +575,9 @@ const createAmcContract = async (req, res) => {
           visit_count, pumps_count, per_pump_price, total_price, gst_percent,
           last_service_date,
           service_date_1, service_date_2, service_date_3,
-          service_date_4, service_date_5, service_date_6)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+          service_date_4, service_date_5, service_date_6,
+          breakdown_visit_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
        RETURNING *`,
       [
         amcId, client_id, title.trim(), start_date, end_date,
@@ -591,6 +592,7 @@ const createAmcContract = async (req, res) => {
         last_service_date || null,
         service_date_1 || null, service_date_2 || null, service_date_3 || null,
         service_date_4 || null, service_date_5 || null, service_date_6 || null,
+        breakdown_visit_count !== undefined && breakdown_visit_count !== null && breakdown_visit_count !== '' ? parseInt(breakdown_visit_count) : null,
       ]
     );
 
@@ -696,7 +698,7 @@ const getAmcById = async (req, res) => {
          a.title, a.po_number, a.start_date, a.end_date, a.value,
          a.status, a.next_service_date, a.renewal_reminder_days,
          a.visit_count, a.pumps_count, a.per_pump_price, a.total_price, a.gst_percent,
-         a.last_service_date,
+         a.last_service_date, a.breakdown_visit_count,
          a.service_date_1, a.service_date_2, a.service_date_3,
          a.service_date_4, a.service_date_5, a.service_date_6,
          (a.end_date - CURRENT_DATE) AS days_left,
@@ -744,7 +746,7 @@ const updateAmcContract = async (req, res) => {
       next_service_date, renewal_reminder_days,
       services, po_number,
       visit_count, pumps_count, per_pump_price, total_price, gst_percent,
-      last_service_date,
+      last_service_date, breakdown_visit_count,
       service_date_1, service_date_2, service_date_3,
       service_date_4, service_date_5, service_date_6,
     } = req.body;
@@ -763,6 +765,7 @@ const updateAmcContract = async (req, res) => {
     const newPerPumpPrice  = per_pump_price !== undefined ? (numOrNull(per_pump_price) === null ? null : parseFloat(per_pump_price)) : cur.per_pump_price;
     const newTotalPrice    = total_price    !== undefined ? (numOrNull(total_price)    === null ? null : parseFloat(total_price))    : cur.total_price;
     const newGstPercent    = gst_percent    !== undefined ? (numOrNull(gst_percent)    === null ? null : parseFloat(gst_percent))    : cur.gst_percent;
+    const newBreakdownVisitCount = breakdown_visit_count !== undefined ? (numOrNull(breakdown_visit_count) === null ? null : parseInt(breakdown_visit_count)) : cur.breakdown_visit_count;
 
     const newServiceDate1 = service_date_1 !== undefined ? (service_date_1 || null) : cur.service_date_1;
     const newServiceDate2 = service_date_2 !== undefined ? (service_date_2 || null) : cur.service_date_2;
@@ -815,8 +818,9 @@ const updateAmcContract = async (req, res) => {
            visit_count=$8, pumps_count=$9, per_pump_price=$10,
            total_price=$11, gst_percent=$12, last_service_date=$13,
            service_date_1=$14, service_date_2=$15, service_date_3=$16,
-           service_date_4=$17, service_date_5=$18, service_date_6=$19
-       WHERE id=$20
+           service_date_4=$17, service_date_5=$18, service_date_6=$19,
+           breakdown_visit_count=$20
+       WHERE id=$21
        RETURNING *`,
       [newTitle, newEndDate, newValue, newStatus,
        newNextServiceDate, newReminderDays, newPoNumber || null,
@@ -824,6 +828,7 @@ const updateAmcContract = async (req, res) => {
        newLastServiceDate,
        newServiceDate1, newServiceDate2, newServiceDate3,
        newServiceDate4, newServiceDate5, newServiceDate6,
+       newBreakdownVisitCount,
        id]
     );
 

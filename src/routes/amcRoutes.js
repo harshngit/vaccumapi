@@ -132,6 +132,10 @@ router.get('/', protect, getAmcContracts);
  *                 type: integer
  *                 example: 4
  *                 description: Number of service visits covered by the AMC
+ *               breakdown_visit_count:
+ *                 type: integer
+ *                 example: 2
+ *                 description: Number of emergency/breakdown-type visits covered by the AMC, separate from visit_count
  *               pumps_count:
  *                 type: integer
  *                 example: 3
@@ -255,6 +259,9 @@ router.get('/:id', protect, getAmcById);
  *               visit_count:
  *                 type: integer
  *                 description: Number of service visits covered by the AMC
+ *               breakdown_visit_count:
+ *                 type: integer
+ *                 description: Number of emergency/breakdown-type visits covered by the AMC, separate from visit_count
  *               pumps_count:
  *                 type: integer
  *                 description: Number of pumps covered by the AMC
