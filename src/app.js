@@ -27,6 +27,7 @@ const myDataRoutes          = require('./routes/myDataRoutes');
 const dataRoutes            = require('./routes/dataRoutes');
 const erpRoutes             = require('./routes/erpRoutes');
 const attendanceRoutes      = require('./routes/attendanceRoutes'); // ✅ NEW
+const whatsappRoutes        = require('./routes/whatsappRoutes');
 
 const app = express();
 
@@ -88,6 +89,7 @@ app.use('/api/my-data',          myDataRoutes);
 app.use('/api/data',             dataRoutes);
 app.use('/api/erp',              erpRoutes);
 app.use('/api/attendance',       attendanceRoutes); // ✅ NEW
+app.use('/api/whatsapp',         whatsappRoutes);
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {

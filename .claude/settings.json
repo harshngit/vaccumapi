@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(24\\).toString\\('hex'\\)\\)\")",
+      "Bash(node -c src/app.js)",
+      "Bash(node -c src/controllers/whatsappController.js)",
+      "Bash(node -c src/routes/whatsappRoutes.js)"
+    ]
+  }
+}
