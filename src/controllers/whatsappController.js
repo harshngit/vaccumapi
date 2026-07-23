@@ -19,7 +19,7 @@ const formatWhatsAppNumber = (phone) => {
 // ─── Core sender: posts a template message via the Graph API ─
 // Requires the template to already exist and be Approved in
 // WhatsApp Manager → Message Templates.
-const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'en_US', components = [] }) => {
+const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'en', components = [] }) => {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
 
