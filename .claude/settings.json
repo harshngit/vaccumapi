@@ -4,7 +4,9 @@
       "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(24\\).toString\\('hex'\\)\\)\")",
       "Bash(node -c src/app.js)",
       "Bash(node -c src/controllers/whatsappController.js)",
-      "Bash(node -c src/routes/whatsappRoutes.js)"
+      "Bash(node -c src/routes/whatsappRoutes.js)",
+      "Bash(curl -s -o /dev/null -w \"HTTP Status: %{http_code}\\\\n\" \"https://api.vdtil.com/health\")",
+      "Bash(curl -s -w \"\\\\nHTTP Status: %{http_code}\\\\n\" \"https://api.vdtil.com/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=95cdc682b61261ffa35f7495b19001b614bdeb707d341854&hub.challenge=test12345\")"
     ]
   }
 }

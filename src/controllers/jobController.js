@@ -15,6 +15,7 @@ const {
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
 const { logActivity } = require('./activityController');
+const { notifyTechnicianJobAssignment } = require('./whatsappController');
 
 // ─── Helper: generate next job ID ────────────────────────────
 const generateJobId = async (client) => {
@@ -254,6 +255,11 @@ const createJob = async (req, res) => {
       entity_type: 'job', entity_id: jobId, performed_by: req.user.id,
     });
 
+    if (technician_id) {
+      notifyTechnicianJobAssignment(jobId, technician_id)
+        .catch(e => console.error('[WhatsApp] job assign notify', e.message));
+    }
+
     return res.status(201).json({
       success: true,
       message: `Job ${jobId} raised successfully.`,
@@ -384,6 +390,11 @@ const updateJob = async (req, res) => {
       [newTitle, newDescription, newTechnicianId, newPriority,
        newCategory, newScheduledDate, newAmount, newStatus, newAmcId, id]
     );
+
+    if (newTechnicianId && newTechnicianId !== cur.technician_id) {
+      notifyTechnicianJobAssignment(id, newTechnicianId)
+        .catch(e => console.error('[WhatsApp] job assign notify', e.message));
+    }
 
     return res.status(200).json({ success: true, message: 'Job updated successfully.', data: result.rows[0] });
 

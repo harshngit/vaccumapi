@@ -17,6 +17,12 @@ const {
   buildAmcRenewalEmail,
   buildServiceReminderEmail,
 } = require('../controllers/amcController');
+const { sendWhatsAppTemplateMessage, formatWhatsAppNumber } = require('../controllers/whatsappController');
+
+// ─── Helper: format a DATE column value as DD-MM-YYYY ─────────
+const formatDateShort = (d) => d
+  ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  : '—';
 
 // ────────────────────────────────────────────────────────────
 // 1. Renewal Reminder
@@ -29,6 +35,7 @@ const runRenewalReminderCheck = async () => {
         a.id, a.title, a.end_date, a.renewal_reminder_days, a.po_number,
         c.name  AS client_name,
         c.email AS client_email,
+        c.phone AS client_phone,
         (a.end_date - CURRENT_DATE) AS days_left
       FROM amc_contracts a
       LEFT JOIN clients c ON c.id = a.client_id
@@ -60,6 +67,25 @@ const runRenewalReminderCheck = async () => {
         console.log(`[AMC Cron] Renewal reminder sent to ${amc.client_email} for ${amc.id}`);
       }
 
+      // ── WhatsApp to client ──────────────────────────────────
+      const whatsappTo = formatWhatsAppNumber(amc.client_phone);
+      if (whatsappTo) {
+        await sendWhatsAppTemplateMessage({
+          to: whatsappTo,
+          templateName: 'amc_renewal_reminder',
+          components: [{
+            type: 'body',
+            parameters: [
+              { type: 'text', text: amc.client_name || 'Customer' },
+              { type: 'text', text: amc.id },
+              { type: 'text', text: amc.title },
+              { type: 'text', text: String(daysLeft) },
+              { type: 'text', text: formatDateShort(amc.end_date) },
+            ],
+          }],
+        });
+      }
+
       console.log(`[AMC Cron] Renewal reminder notified for ${amc.id} — ${daysLeft} days left`);
     }
 
@@ -80,7 +106,8 @@ const runServiceDateReminderCheck = async () => {
       SELECT
         a.id, a.title, a.next_service_date, a.po_number,
         c.name  AS client_name,
-        c.email AS client_email
+        c.email AS client_email,
+        c.phone AS client_phone
       FROM amc_contracts a
       LEFT JOIN clients c ON c.id = a.client_id
       WHERE a.next_service_date IS NOT NULL
@@ -109,6 +136,24 @@ const runServiceDateReminderCheck = async () => {
         });
         console.log(`[AMC Cron] Service reminder sent to ${amc.client_email} for ${amc.id}`);
       }
+
+      // ── WhatsApp to client ──────────────────────────────────
+      const whatsappTo = formatWhatsAppNumber(amc.client_phone);
+      if (whatsappTo) {
+        await sendWhatsAppTemplateMessage({
+          to: whatsappTo,
+          templateName: 'service_reminder',
+          components: [{
+            type: 'body',
+            parameters: [
+              { type: 'text', text: amc.client_name || 'Customer' },
+              { type: 'text', text: amc.id },
+              { type: 'text', text: amc.title },
+              { type: 'text', text: formatDateShort(amc.next_service_date) },
+            ],
+          }],
+        });
+      }
     }
 
     console.log(`[AMC Cron] Service reminder check done. Found ${result.rows.length} upcoming services.`);
@@ -130,7 +175,8 @@ const runNumberedServiceDateReminderCheck = async () => {
         a.id, a.title, a.po_number,
         a.service_date_${n} AS next_service_date, ${n} AS service_number,
         c.name  AS client_name,
-        c.email AS client_email
+        c.email AS client_email,
+        c.phone AS client_phone
       FROM amc_contracts a
       LEFT JOIN clients c ON c.id = a.client_id
       WHERE a.service_date_${n} IS NOT NULL
@@ -160,6 +206,24 @@ const runNumberedServiceDateReminderCheck = async () => {
           html,
         });
         console.log(`[AMC Cron] Service ${amc.service_number} reminder sent to ${amc.client_email} for ${amc.id}`);
+      }
+
+      // ── WhatsApp to client ──────────────────────────────────
+      const whatsappTo = formatWhatsAppNumber(amc.client_phone);
+      if (whatsappTo) {
+        await sendWhatsAppTemplateMessage({
+          to: whatsappTo,
+          templateName: 'service_reminder',
+          components: [{
+            type: 'body',
+            parameters: [
+              { type: 'text', text: amc.client_name || 'Customer' },
+              { type: 'text', text: amc.id },
+              { type: 'text', text: amc.title },
+              { type: 'text', text: formatDateShort(amc.next_service_date) },
+            ],
+          }],
+        });
       }
     }
 

@@ -1,8 +1,106 @@
 // ============================================================
 // src/controllers/whatsappController.js
-// WhatsApp Cloud API webhook — receives incoming messages and
-// delivery status updates from Meta.
+// WhatsApp Cloud API — webhook (incoming) + template sends (outgoing).
 // ============================================================
+
+const pool = require('../config/db');
+
+const WHATSAPP_API_VERSION = 'v20.0';
+
+// ─── Helper: normalize a stored phone number to WhatsApp's
+// expected "countrycode + number" digit-only format. Assumes
+// India (+91) when only a 10-digit local number is stored.
+const formatWhatsAppNumber = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  return digits.length === 10 ? `91${digits}` : digits;
+};
+
+// ─── Core sender: posts a template message via the Graph API ─
+// Requires the template to already exist and be Approved in
+// WhatsApp Manager → Message Templates.
+const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'en', components = [] }) => {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneNumberId || !accessToken) {
+    console.error('[WhatsApp] Not configured — missing WHATSAPP_PHONE_NUMBER_ID/WHATSAPP_ACCESS_TOKEN.');
+    return { success: false };
+  }
+  if (!to) return { success: false };
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to,
+          type: 'template',
+          template: {
+            name: templateName,
+            language: { code: languageCode },
+            ...(components.length ? { components } : {}),
+          },
+        }),
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error(`[WhatsApp] Send failed ("${templateName}" -> ${to}):`, JSON.stringify(data));
+      return { success: false, error: data };
+    }
+    console.log(`[WhatsApp] Sent "${templateName}" to ${to}`);
+    return { success: true, data };
+  } catch (err) {
+    console.error('[WhatsApp] Send error:', err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+// ─── Technician: notify on job assignment ─────────────────────
+// Looks up the technician's phone + job/client details itself,
+// so callers only need to pass the job and technician IDs.
+const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
+  try {
+    const result = await pool.query(
+      `SELECT j.id, j.title, t.name AS technician_name, t.phone AS technician_phone,
+              c.name AS client_name
+       FROM jobs j
+       JOIN technicians t ON t.id = $2
+       LEFT JOIN clients c ON c.id = j.client_id
+       WHERE j.id = $1`,
+      [jobId, technicianId]
+    );
+    if (!result.rows.length) return;
+
+    const row = result.rows[0];
+    const to  = formatWhatsAppNumber(row.technician_phone);
+    if (!to) return;
+
+    await sendWhatsAppTemplateMessage({
+      to,
+      templateName: 'job_assigned',
+      components: [{
+        type: 'body',
+        parameters: [
+          { type: 'text', text: row.technician_name },
+          { type: 'text', text: row.id },
+          { type: 'text', text: row.title },
+          { type: 'text', text: row.client_name || 'N/A' },
+        ],
+      }],
+    });
+  } catch (err) {
+    console.error('[WhatsApp] notifyTechnicianJobAssignment error:', err.message);
+  }
+};
 
 // ────────────────────────────────────────────────────────────
 // GET /api/whatsapp/webhook — verification handshake
@@ -39,4 +137,10 @@ const handleWebhookEvent = (req, res) => {
   return res.sendStatus(200);
 };
 
-module.exports = { verifyWebhook, handleWebhookEvent };
+module.exports = {
+  verifyWebhook,
+  handleWebhookEvent,
+  sendWhatsAppTemplateMessage,
+  notifyTechnicianJobAssignment,
+  formatWhatsAppNumber,
+};
