@@ -9,6 +9,7 @@ const wsManager  = require('../config/websocketManager');
 const { logActivity } = require('./activityController');
 const ERROR_CODES = require('../utils/errorCodes');
 const { sendNotification } = require('./emailController');
+const { sendWhatsAppTemplateMessage, formatWhatsAppNumber } = require('./whatsappController');
 
 // ─── Helper: compute AMC status from dates ───────────────────
 const computeAmcStatus = (endDate, reminderDays) => {
@@ -558,7 +559,7 @@ const createAmcContract = async (req, res) => {
 
     // Validate client exists + get email
     const clientCheck = await dbClient.query(
-      'SELECT id, name, email FROM clients WHERE id = $1', [client_id]
+      'SELECT id, name, email, phone FROM clients WHERE id = $1', [client_id]
     );
     if (clientCheck.rows.length === 0) return Errors.clientNotFound(res);
     const clientRow = clientCheck.rows[0];
@@ -629,6 +630,27 @@ const createAmcContract = async (req, res) => {
         subject: `AMC Contract ${amcId} Created — ${title.trim()} | Electromech Engineering`,
         html,
       });
+    }
+
+    // ── WhatsApp: fire-and-forget — client confirmation ──────
+    const whatsappTo = formatWhatsAppNumber(clientRow.phone);
+    if (!whatsappTo) {
+      console.warn(`[WhatsApp] Skipped amc_created for ${amcId} — client "${clientRow.name}" (id=${client_id}) has no phone number on file.`);
+    } else {
+      sendWhatsAppTemplateMessage({
+        to: whatsappTo,
+        templateName: 'amc_created',
+        components: [{
+          type: 'body',
+          parameters: [
+            { type: 'text', text: clientRow.name },
+            { type: 'text', text: amcId },
+            { type: 'text', text: title.trim() },
+            { type: 'text', text: formatDate(start_date) },
+            { type: 'text', text: formatDate(end_date) },
+          ],
+        }],
+      }).catch(e => console.error('[WhatsApp] amc_created notify', e.message));
     }
 
     // ── WS notification + activity log: .catch so they never throw ──

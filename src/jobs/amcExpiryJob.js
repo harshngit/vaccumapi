@@ -69,7 +69,9 @@ const runRenewalReminderCheck = async () => {
 
       // ── WhatsApp to client ──────────────────────────────────
       const whatsappTo = formatWhatsAppNumber(amc.client_phone);
-      if (whatsappTo) {
+      if (!whatsappTo) {
+        console.warn(`[WhatsApp] Skipped reminder for ${amc.id} — client "${amc.client_name}" has no phone number on file.`);
+      } else {
         await sendWhatsAppTemplateMessage({
           to: whatsappTo,
           templateName: 'amc_renewal_reminder',
@@ -139,7 +141,9 @@ const runServiceDateReminderCheck = async () => {
 
       // ── WhatsApp to client ──────────────────────────────────
       const whatsappTo = formatWhatsAppNumber(amc.client_phone);
-      if (whatsappTo) {
+      if (!whatsappTo) {
+        console.warn(`[WhatsApp] Skipped reminder for ${amc.id} — client "${amc.client_name}" has no phone number on file.`);
+      } else {
         await sendWhatsAppTemplateMessage({
           to: whatsappTo,
           templateName: 'service_reminder',
@@ -210,7 +214,9 @@ const runNumberedServiceDateReminderCheck = async () => {
 
       // ── WhatsApp to client ──────────────────────────────────
       const whatsappTo = formatWhatsAppNumber(amc.client_phone);
-      if (whatsappTo) {
+      if (!whatsappTo) {
+        console.warn(`[WhatsApp] Skipped reminder for ${amc.id} — client "${amc.client_name}" has no phone number on file.`);
+      } else {
         await sendWhatsAppTemplateMessage({
           to: whatsappTo,
           templateName: 'service_reminder',

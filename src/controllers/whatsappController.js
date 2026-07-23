@@ -19,7 +19,7 @@ const formatWhatsAppNumber = (phone) => {
 // ─── Core sender: posts a template message via the Graph API ─
 // Requires the template to already exist and be Approved in
 // WhatsApp Manager → Message Templates.
-const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'en', components = [] }) => {
+const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'en_US', components = [] }) => {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
 
@@ -78,11 +78,17 @@ const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
        WHERE j.id = $1`,
       [jobId, technicianId]
     );
-    if (!result.rows.length) return;
+    if (!result.rows.length) {
+      console.warn(`[WhatsApp] Skipped job_assigned — job "${jobId}" or technician id=${technicianId} not found.`);
+      return;
+    }
 
     const row = result.rows[0];
     const to  = formatWhatsAppNumber(row.technician_phone);
-    if (!to) return;
+    if (!to) {
+      console.warn(`[WhatsApp] Skipped job_assigned for ${jobId} — technician "${row.technician_name}" has no phone number on file.`);
+      return;
+    }
 
     await sendWhatsAppTemplateMessage({
       to,
