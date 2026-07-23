@@ -55,7 +55,7 @@ const notify = async (opts, wsManager) => {
       // Fetch all user IDs with those roles so we can save per-user rows
       const placeholders = roles.map((_, i) => `$${i + 1}`).join(', ');
       const usersRes = await pool.query(
-        `SELECT id FROM users WHERE role = ANY(ARRAY[${placeholders}]::text[]) AND is_active = TRUE`,
+        `SELECT id FROM users WHERE role::text = ANY(ARRAY[${placeholders}]::text[]) AND is_active = TRUE`,
         roles
       );
       for (const row of usersRes.rows) {
