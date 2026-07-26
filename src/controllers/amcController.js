@@ -8,8 +8,9 @@ const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
 const { logActivity } = require('./activityController');
 const ERROR_CODES = require('../utils/errorCodes');
-const { sendNotification } = require('./emailController');
 const { sendWhatsAppTemplateMessage, formatWhatsAppNumber } = require('./whatsappController');
+const { sendNotification } = require('./emailController');
+const { isValidEmail } = require('../utils/validators');
 
 // ─── Helper: compute AMC status from dates ───────────────────
 const computeAmcStatus = (endDate, reminderDays) => {
@@ -58,8 +59,8 @@ const validateServiceDates = (visitCount, serviceDates) => {
   return missing.length ? { missing } : null;
 };
 
-// ─── Email: AMC Created ───────────────────────────────────────
-const buildAmcCreatedEmail = (contract) => `
+// ─── Email: AMC Contract Details (manual send) ────────────────
+const buildAmcContractEmail = (contract) => `
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -78,7 +79,7 @@ const buildAmcCreatedEmail = (contract) => `
               ⚙️ Electromech Engineering
             </h1>
             <p style="color:#a7f3d0;margin:6px 0 0;font-size:14px;">
-              Annual Maintenance Contract — Confirmation
+              Annual Maintenance Contract — Details
             </p>
           </td>
         </tr>
@@ -90,8 +91,7 @@ const buildAmcCreatedEmail = (contract) => `
               Dear <strong>${contract.client_name}</strong>,
             </p>
             <p style="color:#4b5563;font-size:14px;line-height:1.7;margin:12px 0 0;">
-              We are pleased to confirm that your Annual Maintenance Contract has been successfully
-              created. Please find the contract details below.
+              Please find the details of your Annual Maintenance Contract below.
             </p>
           </td>
         </tr>
@@ -160,17 +160,6 @@ const buildAmcCreatedEmail = (contract) => `
                 </td>
               </tr>` : ''}
             </table>
-          </td>
-        </tr>
-
-        <!-- Status -->
-        <tr>
-          <td style="padding:0 40px 20px;">
-            <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:6px;padding:12px 16px;">
-              <span style="color:#065f46;font-size:13px;">
-                ✅ <strong>Status: Active</strong> — Your contract is now active.
-              </span>
-            </div>
           </td>
         </tr>
 
@@ -615,22 +604,12 @@ const createAmcContract = async (req, res) => {
     contract.client_email = clientRow.email;
     contract.days_left   = Math.ceil((new Date(end_date) - new Date()) / (1000 * 60 * 60 * 24));
 
-    // ── Respond IMMEDIATELY — never block on email/notifications ──
+    // ── Respond IMMEDIATELY — never block on notifications ──
     res.status(201).json({
       success: true,
-      message: `AMC contract ${amcId} created for ${contract.client_name}.${clientRow.email ? ` Confirmation email is being sent to ${clientRow.email}.` : ''}`,
+      message: `AMC contract ${amcId} created for ${contract.client_name}.`,
       data: contract,
     });
-
-    // ── Email: fire-and-forget — sendNotification returns instantly ──
-    if (clientRow.email) {
-      const html = buildAmcCreatedEmail(contract);
-      sendNotification('amc_created', {
-        to:      clientRow.email,
-        subject: `AMC Contract ${amcId} Created — ${title.trim()} | Electromech Engineering`,
-        html,
-      });
-    }
 
     // ── WhatsApp: fire-and-forget — client confirmation ──────
     const whatsappTo = formatWhatsAppNumber(clientRow.phone);
@@ -745,6 +724,72 @@ const getAmcById = async (req, res) => {
 
   } catch (error) {
     console.error('Get AMC by ID error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// POST /api/amc/:id/send-email
+// Manually send the AMC contract details to an email address
+// supplied by the caller (not necessarily the client's stored email).
+// ────────────────────────────────────────────────────────────
+const sendAmcEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    if (!email) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        'email is required.', { field: 'email' });
+    }
+    if (!isValidEmail(email)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'A valid email address is required.', { field: 'email' });
+    }
+
+    const result = await pool.query(
+      `SELECT
+         a.id, a.client_id, c.name AS client_name,
+         a.title, a.po_number, a.start_date, a.end_date, a.value,
+         a.next_service_date
+       FROM amc_contracts a
+       LEFT JOIN clients c ON c.id = a.client_id
+       WHERE a.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return sendError(res, 404, ERROR_CODES.CLIENT_NOT_FOUND, 'AMC contract not found.');
+    }
+
+    const contract = result.rows[0];
+    const svc = await pool.query(
+      'SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id', [id]
+    );
+    contract.services = svc.rows.map(r => r.service_name);
+
+    const html = buildAmcContractEmail(contract);
+    sendNotification('amc_manual_email', {
+      to:      email,
+      subject: `AMC Contract ${id} Details — ${contract.title} | Electromech Engineering`,
+      html,
+    });
+
+    logActivity({
+      type:         'amc',
+      action:       `AMC ${id} details emailed to ${email}`,
+      entity_type:  'amc',
+      entity_id:    id,
+      performed_by: req.user.id,
+    }).catch(e => console.error('[amc activity]', e.message));
+
+    return res.status(200).json({
+      success: true,
+      message: `AMC contract ${id} details sent to ${email}.`,
+    });
+
+  } catch (error) {
+    console.error('Send AMC email error:', error);
     return Errors.internalError(res);
   }
 };
@@ -935,6 +980,7 @@ module.exports = {
   getAmcById,
   updateAmcContract,
   deleteAmcContract,
+  sendAmcEmail,
   // Email builders exported so amcExpiryJob can use them
   buildAmcRenewalEmail,
   buildServiceReminderEmail,

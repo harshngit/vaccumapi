@@ -11,6 +11,7 @@ const {
   getAmcById,
   updateAmcContract,
   deleteAmcContract,
+  sendAmcEmail,
 } = require('../controllers/amcController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -80,7 +81,7 @@ router.get('/', protect, getAmcContracts);
  *   post:
  *     summary: Create a new AMC contract
  *     description: |
- *       Creates the contract and sends a confirmation email to the client.
+ *       Creates the contract and sends a WhatsApp confirmation to the client (no email is sent).
  *       The cron job will send a renewal reminder email when expiry is within
  *       renewal_reminder_days, and a 10-day service reminder based on next_service_date
  *       as well as each of service_date_1..service_date_6 that is set.
@@ -187,7 +188,7 @@ router.get('/', protect, getAmcContracts);
  *                 description: Scheduled date for service visit 6 (required when visit_count >= 6)
  *     responses:
  *       201:
- *         description: AMC contract created and confirmation email sent
+ *         description: AMC contract created and WhatsApp confirmation sent
  *       400:
  *         description: Validation error
  */
@@ -216,6 +217,48 @@ router.post('/', protect, authorize('admin', 'manager'), createAmcContract);
  *         description: Not found
  */
 router.get('/:id', protect, getAmcById);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/amc/{id}/send-email:
+ *   post:
+ *     summary: Manually email the AMC contract details to a given address
+ *     description: |
+ *       Sends the contract details (title, dates, value, services) to an email
+ *       address supplied in the request body — this does not have to be the
+ *       client's stored email, so it can be used to forward details to anyone.
+ *     tags: [AMC Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *         example: AMC-0001
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: client@example.com
+ *     responses:
+ *       200:
+ *         description: Email queued for sending
+ *       400:
+ *         description: Missing or invalid email
+ *       404:
+ *         description: AMC contract not found
+ */
+router.post('/:id/send-email', protect, authorize('admin', 'manager'), sendAmcEmail);
 
 // ────────────────────────────────────────────────────────────
 
