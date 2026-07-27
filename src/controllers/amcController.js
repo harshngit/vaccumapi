@@ -627,6 +627,7 @@ const createAmcContract = async (req, res) => {
             { type: 'text', text: title.trim() },
             { type: 'text', text: formatDate(start_date) },
             { type: 'text', text: formatDate(end_date) },
+            { type: 'text', text: `₹${parseFloat(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
           ],
         }],
       }).catch(e => console.error('[WhatsApp] amc_created notify', e.message));

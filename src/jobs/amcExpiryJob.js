@@ -17,12 +17,7 @@ const {
   buildAmcRenewalEmail,
   buildServiceReminderEmail,
 } = require('../controllers/amcController');
-const { sendWhatsAppTemplateMessage, formatWhatsAppNumber } = require('../controllers/whatsappController');
-
-// ─── Helper: format a DATE column value as DD-MM-YYYY ─────────
-const formatDateShort = (d) => d
-  ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  : '—';
+const { sendWhatsAppTemplateMessage, formatWhatsAppNumber, formatDateShort } = require('../controllers/whatsappController');
 
 // ────────────────────────────────────────────────────────────
 // 1. Renewal Reminder
@@ -83,6 +78,7 @@ const runRenewalReminderCheck = async () => {
               { type: 'text', text: amc.title },
               { type: 'text', text: String(daysLeft) },
               { type: 'text', text: formatDateShort(amc.end_date) },
+              { type: 'text', text: amc.po_number || 'N/A' },
             ],
           }],
         });
@@ -154,6 +150,7 @@ const runServiceDateReminderCheck = async () => {
               { type: 'text', text: amc.id },
               { type: 'text', text: amc.title },
               { type: 'text', text: formatDateShort(amc.next_service_date) },
+              { type: 'text', text: amc.po_number || 'N/A' },
             ],
           }],
         });
@@ -227,6 +224,7 @@ const runNumberedServiceDateReminderCheck = async () => {
               { type: 'text', text: amc.id },
               { type: 'text', text: amc.title },
               { type: 'text', text: formatDateShort(amc.next_service_date) },
+              { type: 'text', text: amc.po_number || 'N/A' },
             ],
           }],
         });

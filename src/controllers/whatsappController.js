@@ -16,6 +16,11 @@ const formatWhatsAppNumber = (phone) => {
   return digits.length === 10 ? `91${digits}` : digits;
 };
 
+// ─── Helper: format a DATE column value as DD-MM-YYYY ─────────
+const formatDateShort = (d) => d
+  ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  : 'Not scheduled';
+
 // ─── Core sender: posts a template message via the Graph API ─
 // Requires the template to already exist and be Approved in
 // WhatsApp Manager → Message Templates.
@@ -70,7 +75,7 @@ const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'e
 const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
   try {
     const result = await pool.query(
-      `SELECT j.id, j.title, t.name AS technician_name, t.phone AS technician_phone,
+      `SELECT j.id, j.title, j.scheduled_date, t.name AS technician_name, t.phone AS technician_phone,
               c.name AS client_name
        FROM jobs j
        JOIN technicians t ON t.id = $2
@@ -100,6 +105,7 @@ const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
           { type: 'text', text: row.id },
           { type: 'text', text: row.title },
           { type: 'text', text: row.client_name || 'N/A' },
+          { type: 'text', text: formatDateShort(row.scheduled_date) },
         ],
       }],
     });
@@ -149,4 +155,5 @@ module.exports = {
   sendWhatsAppTemplateMessage,
   notifyTechnicianJobAssignment,
   formatWhatsAppNumber,
+  formatDateShort,
 };
