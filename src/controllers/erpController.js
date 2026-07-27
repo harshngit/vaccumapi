@@ -103,6 +103,7 @@ function groupQuotations(rawRows) {
 
         priority       : toStr(row.EnquiryPriority),
         category       : toStr(row.CategoryName),
+        series         : toStr(row.SeriesName),
         sector         : toStr(row.Enq_Sector),
         plant          : toStr(row.EnquiryPlantName),
         financial_year : toStr(row.FyName),
@@ -196,15 +197,20 @@ function handleErpError(error, res, context) {
 // ─── GET /api/erp/quotations ──────────────────────────────────
 /**
  * Returns grouped quotations (items[] nested inside each).
- * All filtering is done client-side since the ERP returns all records.
+ * from_date/to_date are pushed down to the ERP itself (fromDate/toDate) —
+ * confirmed to genuinely filter server-side, which keeps the payload small
+ * and fast instead of pulling the entire multi-year dataset every call.
+ * Everything else (search, status, series, etc.) is filtered client-side
+ * since the ERP ignores those params.
  *
  * Query params:
  *   search       — searches quot_no, enquiry_no, customer name, subject
  *   status       — Open | Approved | Cancelled  (alias: Rejected → Cancelled)
- *   from_date    — YYYY-MM-DD  (filters by QuotDate >=)
- *   to_date      — YYYY-MM-DD  (filters by QuotDate <=)
+ *   from_date    — YYYY-MM-DD  (pushed to ERP as fromDate; filters QuotDate >=)
+ *   to_date      — YYYY-MM-DD  (pushed to ERP as toDate; filters QuotDate <=)
  *   priority     — High | Medium | Low
- *   category     — AMC Service | Spare | Accessories | etc. (partial match)
+ *   category     — partial match on ERP CategoryName (often blank in practice)
+ *   series       — partial match on ERP SeriesName — e.g. Spares | Accessories | AMC Quotation | Service
  *   prepared_by  — partial name match on PreparedByName
  *   entered_by   — partial name match on EntryUserName
  *   page         — default 1
@@ -221,6 +227,7 @@ const getQuotations = async (req, res) => {
       to_date,
       priority,
       category,
+      series,
       prepared_by,
       entered_by,
     } = req.query;
@@ -228,8 +235,12 @@ const getQuotations = async (req, res) => {
     const page  = Math.max(1, parseInt(rawPage)  || 1);
     const limit = Math.min(100, Math.max(1, parseInt(rawLimit) || 20));
 
-    // Fetch everything from ERP (no server-side filtering supported)
-    const erpData = await fetchFromERP('QuotationAPI.ashx');
+    // Push date range down to the ERP itself — genuinely filters server-side
+    // and keeps the payload small instead of pulling every quotation ever made.
+    const erpData = await fetchFromERP('QuotationAPI.ashx', {
+      fromDate: from_date,
+      toDate:   to_date,
+    });
     const rawRows = toRawArray(erpData);
 
     // Group flat line-item rows → quotation objects with items[]
@@ -277,6 +288,13 @@ const getQuotations = async (req, res) => {
       );
     }
 
+    if (series) {
+      const q = series.toLowerCase();
+      quotations = quotations.filter(qt =>
+        qt.series?.toLowerCase().includes(q)
+      );
+    }
+
     if (prepared_by) {
       const q = prepared_by.toLowerCase();
       quotations = quotations.filter(qt =>
@@ -316,6 +334,7 @@ const getQuotations = async (req, res) => {
         to_date     : to_date     || null,
         priority    : priority    || null,
         category    : category    || null,
+        series      : series      || null,
         prepared_by : prepared_by || null,
         entered_by  : entered_by  || null,
       },
@@ -531,7 +550,7 @@ const syncQuotations = async (_req, res) => {
               erp_customer_id, erp_customer_code, erp_customer_name,
               bill_to_id, bill_to_name, ship_to_id, ship_to_name,
               client_id,
-              priority, category, sector, plant, financial_year, currency,
+              priority, category, series, sector, plant, financial_year, currency,
               net_total, discount_per, discount_amt,
               cgst_per, cgst_amt, sgst_per, sgst_amt, igst_per, igst_amt,
               prepared_by, prepared_by_id, entered_by, entered_by_id,
@@ -543,12 +562,12 @@ const syncQuotations = async (_req, res) => {
             ) VALUES (
               $1,$2,$3,$4,$5,$6,$7,$8,$9,
               $10,$11,$12,$13,$14,$15,$16,$17,
-              $18,$19,$20,$21,$22,$23,
-              $24,$25,$26,$27,$28,$29,$30,$31,$32,
-              $33,$34,$35,$36,
-              $37,$38,$39,$40,$41,
-              $42,$43,$44,$45,$46,$47,
-              $48,$49,$50,
+              $18,$19,$20,$21,$22,$23,$24,
+              $25,$26,$27,$28,$29,$30,$31,$32,$33,
+              $34,$35,$36,$37,
+              $38,$39,$40,$41,$42,
+              $43,$44,$45,$46,$47,$48,
+              $49,$50,$51,
               NOW()
             )
             ON CONFLICT (quot_id) DO UPDATE SET
@@ -570,6 +589,7 @@ const syncQuotations = async (_req, res) => {
               client_id         = EXCLUDED.client_id,
               priority          = EXCLUDED.priority,
               category          = EXCLUDED.category,
+              series            = EXCLUDED.series,
               sector            = EXCLUDED.sector,
               plant             = EXCLUDED.plant,
               financial_year    = EXCLUDED.financial_year,
@@ -608,7 +628,7 @@ const syncQuotations = async (_req, res) => {
             qt.customer.id, qt.customer.code, qt.customer.name,
             qt.bill_to.id, qt.bill_to.name, qt.ship_to.id, qt.ship_to.name,
             clientId,
-            qt.priority, qt.category, qt.sector, qt.plant, qt.financial_year, qt.currency,
+            qt.priority, qt.category, qt.series, qt.sector, qt.plant, qt.financial_year, qt.currency,
             qt.net_total, qt.discount_per, qt.discount_amt,
             qt.gst.cgst_per, qt.gst.cgst_amt, qt.gst.sgst_per, qt.gst.sgst_amt,
             qt.gst.igst_per, qt.gst.igst_amt,
@@ -696,6 +716,7 @@ function formatLocalQuotation(row) {
 
     priority       : row.priority,
     category       : row.category,
+    series         : row.series,
     sector         : row.sector,
     plant          : row.plant,
     financial_year : row.financial_year,
@@ -787,6 +808,7 @@ const getLocalQuotations = async (req, res) => {
       to_date,
       priority,
       category,
+      series,
       prepared_by,
       entered_by,
       client_id,
@@ -837,6 +859,11 @@ const getLocalQuotations = async (req, res) => {
       params.push(`%${category}%`); p++;
     }
 
+    if (series) {
+      where.push(`q.series ILIKE $${p}`);
+      params.push(`%${series}%`); p++;
+    }
+
     if (prepared_by) {
       where.push(`q.prepared_by ILIKE $${p}`);
       params.push(`%${prepared_by}%`); p++;
@@ -869,7 +896,7 @@ const getLocalQuotations = async (req, res) => {
         q.erp_customer_id, q.erp_customer_code, q.erp_customer_name,
         q.bill_to_id, q.bill_to_name, q.ship_to_id, q.ship_to_name,
         q.client_id,
-        q.priority, q.category, q.sector, q.plant, q.financial_year, q.currency,
+        q.priority, q.category, q.series, q.sector, q.plant, q.financial_year, q.currency,
         q.net_total, q.discount_per, q.discount_amt,
         q.cgst_per, q.cgst_amt, q.sgst_per, q.sgst_amt, q.igst_per, q.igst_amt,
         q.prepared_by, q.prepared_by_id, q.entered_by, q.entered_by_id,
@@ -908,6 +935,7 @@ const getLocalQuotations = async (req, res) => {
         to_date     : to_date     || null,
         priority    : priority    || null,
         category    : category    || null,
+        series      : series      || null,
         prepared_by : prepared_by || null,
         entered_by  : entered_by  || null,
         client_id   : client_id   || null,
@@ -931,7 +959,7 @@ const getLocalQuotationById = async (req, res) => {
         q.erp_customer_id, q.erp_customer_code, q.erp_customer_name,
         q.bill_to_id, q.bill_to_name, q.ship_to_id, q.ship_to_name,
         q.client_id,
-        q.priority, q.category, q.sector, q.plant, q.financial_year, q.currency,
+        q.priority, q.category, q.series, q.sector, q.plant, q.financial_year, q.currency,
         q.net_total, q.discount_per, q.discount_amt,
         q.cgst_per, q.cgst_amt, q.sgst_per, q.sgst_amt, q.igst_per, q.igst_amt,
         q.prepared_by, q.prepared_by_id, q.entered_by, q.entered_by_id,

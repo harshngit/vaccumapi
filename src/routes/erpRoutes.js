@@ -79,8 +79,12 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *         priority:       { type: string, enum: [High, Medium, Low], example: "High" }
  *         category:
  *           type: string
- *           description: Quotation category from ERP (AMC Service | Spare | Accessories | etc.)
+ *           description: Quotation category from ERP CategoryName (often blank in practice — use series instead)
  *           example: "Spare"
+ *         series:
+ *           type: string
+ *           description: Quotation series from ERP SeriesName (Spares | Accessories | AMC Quotation | Service)
+ *           example: "Spares"
  *         sector:         { type: string, example: "" }
  *         plant:          { type: string, example: "VACUUM" }
  *         financial_year: { type: string, example: "26-27" }
@@ -161,6 +165,7 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *             to_date:     { type: string, nullable: true }
  *             priority:    { type: string, nullable: true }
  *             category:    { type: string, nullable: true }
+ *             series:      { type: string, nullable: true }
  *             prepared_by: { type: string, nullable: true }
  *             entered_by:  { type: string, nullable: true }
  *
@@ -254,12 +259,19 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *   get:
  *     summary: Get all quotations from ERP (grouped, with filters)
  *     description: |
- *       Fetches all quotation records from the ERP (`QuotationAPI.ashx`), groups
+ *       Fetches quotation records from the ERP (`QuotationAPI.ashx`), groups
  *       the flat line-item rows into proper quotation objects, applies filters,
  *       then paginates the result.
  *
  *       > **Note:** The ERP returns one row per product line.
  *       > This API groups them so each quotation has an `items[]` array inside it.
+ *
+ *       > **Performance:** `from_date`/`to_date` are forwarded to the ERP itself
+ *       > (as `fromDate`/`toDate`) and genuinely filter server-side — always pass
+ *       > a date range where possible, since the unfiltered call pulls the ERP's
+ *       > entire quotation history (tens of MB, ~20s). All other filters
+ *       > (`search`, `category`, `series`, etc.) run client-side on whatever the
+ *       > date range returns, since the ERP ignores those params.
  *
  *       ### Quotation Status (derived field)
  *       There is no single status field in the ERP — it is derived from flags:
@@ -313,9 +325,16 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *         schema: { type: string }
  *         description: >
  *           Partial match on quotation category (from ERP `CategoryName` field).
- *           Common values: `AMC Service`, `Spare`, `Accessories`.
- *           Case-insensitive — `spare` matches "Spare Parts".
+ *           In practice this field is often blank on the ERP side — use `series` instead.
  *         example: "AMC Service"
+ *       - in: query
+ *         name: series
+ *         schema: { type: string }
+ *         description: >
+ *           Partial match on the quotation's series (from ERP `SeriesName` field).
+ *           Real observed values: `Spares`, `Accessories`, `AMC Quotation`, `Service`.
+ *           Case-insensitive — `amc` matches "AMC Quotation".
+ *         example: "Spares"
  *       - in: query
  *         name: prepared_by
  *         schema: { type: string }
@@ -662,7 +681,8 @@ router.get('/customers/:id', protect, getCustomerById);
  *       | ERP customer matches `clients.erp_customer_id` | `client_id` FK set automatically |
  *       | No matching local client | `client_id` = NULL |
  *
- *       > **Prerequisite:** Run `db/queries/009_erp_quotations.sql` on the database first.
+ *       > **Prerequisite:** Run `db/queries/009_erp_quotations.sql` and
+ *       > `db/queries/012_erp_quotations_series.sql` on the database first.
  *
  *       > **Access:** Admin and Manager only.
  *     tags: [ERP – Sync & Local DB]
@@ -780,8 +800,13 @@ router.post('/sync/quotations', protect, authorize('admin', 'manager'), syncQuot
  *       - in: query
  *         name: category
  *         schema: { type: string }
- *         description: Partial match — AMC Service | Spare | Accessories
+ *         description: Partial match on CategoryName (often blank in practice — use series instead)
  *         example: "Accessories"
+ *       - in: query
+ *         name: series
+ *         schema: { type: string }
+ *         description: Partial match on SeriesName — Spares | Accessories | AMC Quotation | Service
+ *         example: "Spares"
  *       - in: query
  *         name: prepared_by
  *         schema: { type: string }
