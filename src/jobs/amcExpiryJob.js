@@ -19,6 +19,13 @@ const {
 } = require('../controllers/amcController');
 const { sendWhatsAppTemplateMessage, formatWhatsAppNumber, formatDateShort } = require('../controllers/whatsappController');
 
+// ─── Helper: phone number formatted for display (tap-to-call text) ──
+const formatPhoneDisplay = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return 'Not available';
+  return digits.length === 10 ? `+91 ${digits}` : `+${digits}`;
+};
+
 // ────────────────────────────────────────────────────────────
 // 1. Renewal Reminder
 // ────────────────────────────────────────────────────────────
@@ -105,9 +112,17 @@ const runServiceDateReminderCheck = async () => {
         a.id, a.title, a.next_service_date, a.po_number,
         c.name  AS client_name,
         c.email AS client_email,
-        c.phone AS client_phone
+        c.phone AS client_phone,
+        t.name  AS technician_name,
+        t.phone AS technician_phone
       FROM amc_contracts a
       LEFT JOIN clients c ON c.id = a.client_id
+      LEFT JOIN LATERAL (
+        SELECT technician_id FROM jobs
+        WHERE amc_id = a.id AND scheduled_date = a.next_service_date AND technician_id IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1
+      ) j ON true
+      LEFT JOIN technicians t ON t.id = j.technician_id
       WHERE a.next_service_date IS NOT NULL
         AND (a.next_service_date - CURRENT_DATE) = 10
         AND a.status != 'Expired'
@@ -142,7 +157,7 @@ const runServiceDateReminderCheck = async () => {
       } else {
         await sendWhatsAppTemplateMessage({
           to: whatsappTo,
-          templateName: 'service_reminder',
+          templateName: 'service_reminder_v2',
           components: [{
             type: 'body',
             parameters: [
@@ -151,6 +166,8 @@ const runServiceDateReminderCheck = async () => {
               { type: 'text', text: amc.title },
               { type: 'text', text: formatDateShort(amc.next_service_date) },
               { type: 'text', text: amc.po_number || 'N/A' },
+              { type: 'text', text: amc.technician_name || 'Not yet assigned' },
+              { type: 'text', text: amc.technician_name ? formatPhoneDisplay(amc.technician_phone) : 'N/A' },
             ],
           }],
         });
@@ -177,9 +194,17 @@ const runNumberedServiceDateReminderCheck = async () => {
         a.service_date_${n} AS next_service_date, ${n} AS service_number,
         c.name  AS client_name,
         c.email AS client_email,
-        c.phone AS client_phone
+        c.phone AS client_phone,
+        t.name  AS technician_name,
+        t.phone AS technician_phone
       FROM amc_contracts a
       LEFT JOIN clients c ON c.id = a.client_id
+      LEFT JOIN LATERAL (
+        SELECT technician_id FROM jobs
+        WHERE amc_id = a.id AND scheduled_date = a.service_date_${n} AND technician_id IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1
+      ) j ON true
+      LEFT JOIN technicians t ON t.id = j.technician_id
       WHERE a.service_date_${n} IS NOT NULL
         AND (a.service_date_${n} - CURRENT_DATE) = 10
         AND a.status != 'Expired'
@@ -216,7 +241,7 @@ const runNumberedServiceDateReminderCheck = async () => {
       } else {
         await sendWhatsAppTemplateMessage({
           to: whatsappTo,
-          templateName: 'service_reminder',
+          templateName: 'service_reminder_v2',
           components: [{
             type: 'body',
             parameters: [
@@ -225,6 +250,8 @@ const runNumberedServiceDateReminderCheck = async () => {
               { type: 'text', text: amc.title },
               { type: 'text', text: formatDateShort(amc.next_service_date) },
               { type: 'text', text: amc.po_number || 'N/A' },
+              { type: 'text', text: amc.technician_name || 'Not yet assigned' },
+              { type: 'text', text: amc.technician_name ? formatPhoneDisplay(amc.technician_phone) : 'N/A' },
             ],
           }],
         });
