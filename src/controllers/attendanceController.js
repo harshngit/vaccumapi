@@ -7,10 +7,11 @@ const pool          = require('../config/db');
 const { sendError } = require('../utils/AppError');
 const ERROR_CODES   = require('../utils/errorCodes');
 
-const RPX_API_ID     = process.env.RAZORPAYX_API_ID;
-const RPX_API_KEY    = process.env.RAZORPAYX_API_KEY;
-const RPX_PEOPLE_URL = 'https://payroll.razorpay.com/api/people';
-const RPX_ATT_URL    = 'https://payroll.razorpay.com/api/att';
+const RPX_API_ID      = process.env.RAZORPAYX_API_ID;
+const RPX_API_KEY     = process.env.RAZORPAYX_API_KEY;
+const RPX_PEOPLE_URL  = 'https://payroll.razorpay.com/api/people';
+const RPX_ATT_URL     = 'https://payroll.razorpay.com/api/att';
+const RPX_LEAVE_URL   = 'https://payroll.razorpay.com/api/leave';
 
 // ─── Helper: generic RazorpayX POST (accepts URL) ────────────
 async function razorpayxPost(url, type, subType, data = {}) {
@@ -505,6 +506,55 @@ const fetchAttendanceByDate = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// GET /api/attendance/leave
+// Fetch leave records for an employee from RazorpayX /api/leave
+// Query params: email (required), from (YYYY-MM-DD), to (YYYY-MM-DD),
+//               employee_type (optional, default "employee")
+// ────────────────────────────────────────────────────────────
+const fetchLeaveByEmployee = async (req, res) => {
+  try {
+    const { email, from, to, employee_type = 'employee' } = req.query;
+
+    if (!email) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        '"email" query parameter is required.');
+    }
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (from && !dateRegex.test(from)) {
+      return sendError(res, 400, 'INVALID_DATE_FORMAT',
+        '"from" must be in YYYY-MM-DD format (e.g. 2025-01-01).');
+    }
+
+    if (to && !dateRegex.test(to)) {
+      return sendError(res, 400, 'INVALID_DATE_FORMAT',
+        '"to" must be in YYYY-MM-DD format (e.g. 2025-12-31).');
+    }
+
+    console.log(`[Attendance] Fetching leave for ${email} | from: ${from || 'N/A'} to: ${to || 'N/A'}`);
+
+    const data = { email, 'employee-type': employee_type };
+    if (from) data.from = from;
+    if (to)   data.to   = to;
+
+    const result = await razorpayxPost(RPX_LEAVE_URL, 'leave', 'fetch', data);
+
+    return res.status(200).json({
+      success: true,
+      email,
+      from:    from || null,
+      to:      to   || null,
+      leave:   result,
+    });
+
+  } catch (error) {
+    console.error('[Attendance] fetchLeaveByEmployee error:', error.message);
+    return sendError(res, 502, 'RAZORPAYX_ERROR', error.message);
+  }
+};
+
 module.exports = {
   viewEmployeeFromPeople,
   storeEmployee,
@@ -513,4 +563,5 @@ module.exports = {
   getAllStoredEmployees,
   getStoredEmployee,
   fetchAttendanceByDate,
+  fetchLeaveByEmployee,
 };
