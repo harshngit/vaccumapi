@@ -12,7 +12,6 @@ const {
   getAllStoredEmployees,
   getStoredEmployee,
   fetchAttendanceByDate,
-  fetchLeaveByEmployee,
 } = require('../controllers/attendanceController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -86,57 +85,6 @@ router.use(protect);
  *         description: RazorpayX API error
  */
 router.get('/fetch', authorize('admin', 'manager'), fetchAttendanceByDate);
-
-/**
- * @swagger
- * /api/attendance/leave:
- *   get:
- *     summary: Fetch leave records for an employee from RazorpayX
- *     description: |
- *       Calls `https://payroll.razorpay.com/api/leave` with `type: leave`, `sub-type: fetch`.
- *       Returns leave records for the given employee email and optional date range.
- *       If `from` / `to` are omitted, RazorpayX returns all available leave records.
- *     tags: [Attendance]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: email
- *         required: true
- *         schema: { type: string, example: "rbaikar06@gmail.com" }
- *         description: Employee email address registered in Razorpay Payroll
- *       - in: query
- *         name: from
- *         required: false
- *         schema: { type: string, example: "2025-04-01" }
- *         description: Start date in YYYY-MM-DD format (financial year start recommended)
- *       - in: query
- *         name: to
- *         required: false
- *         schema: { type: string, example: "2026-03-31" }
- *         description: End date in YYYY-MM-DD format
- *       - in: query
- *         name: employee_type
- *         required: false
- *         schema: { type: string, default: "employee", example: "employee" }
- *         description: RazorpayX employee type
- *     responses:
- *       200:
- *         description: Leave records for the employee
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 email:   { type: string,  example: "rbaikar06@gmail.com" }
- *                 from:    { type: string,  example: "2025-04-01" }
- *                 to:      { type: string,  example: "2026-03-31" }
- *                 leave:   { type: object,  description: "Raw RazorpayX leave response" }
- *       400: { description: Missing email or invalid date format }
- *       502: { description: RazorpayX API error }
- */
-router.get('/leave', authorize('admin', 'manager'), fetchLeaveByEmployee);
 
 router.get('/people/view/:employee_id', authorize('admin'), viewEmployeeFromPeople);
 

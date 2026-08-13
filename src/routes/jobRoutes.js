@@ -55,7 +55,7 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *         name: category
  *         schema:
  *           type: string
- *           enum: [Service, "AMC Visit", Breakdown, "Installation & Commissioning", Inspection]
+ *           enum: [Service, "AMC Visit", Breakdown, "Installation & Commissioning", Inspection, Workshop]
  *       - in: query
  *         name: client_id
  *         schema: { type: integer }
@@ -174,7 +174,7 @@ router.get('/by-user/:user_id', protect, getJobsByUser);
  *                 default: Medium
  *               category:
  *                 type: string
- *                 enum: [Service, "AMC Visit", Breakdown, "Installation & Commissioning", Inspection]
+ *                 enum: [Service, "AMC Visit", Breakdown, "Installation & Commissioning", Inspection, Workshop]
  *                 default: Service
  *               scheduled_date: { type: string, format: date }
  *               amount:         { type: number, default: 0 }
@@ -242,7 +242,7 @@ router.get('/:id', protect, getJobById);
  *               priority:       { type: string }
  *               category:
  *                 type: string
- *                 enum: [Service, "AMC Visit", Breakdown, "Installation & Commissioning", Inspection]
+ *                 enum: [Service, "AMC Visit", Breakdown, "Installation & Commissioning", Inspection, Workshop]
  *               scheduled_date: { type: string, format: date }
  *               amount:         { type: number }
  *     responses:

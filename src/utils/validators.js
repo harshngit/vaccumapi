@@ -38,7 +38,7 @@ const isValidJobPriority = (priority) => {
 };
 
 const isValidJobCategory = (category) => {
-  return ['Service', 'AMC Visit', 'Breakdown', 'Installation & Commissioning', 'Inspection'].includes(category);
+  return ['Service', 'AMC Visit', 'Breakdown', 'Installation & Commissioning', 'Inspection', 'Workshop'].includes(category);
 };
 
 const isValidReportStatus = (status) => {
