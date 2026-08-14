@@ -2,7 +2,7 @@ const pool    = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
 const bcrypt = require('bcryptjs');
-const { isValidPhone, normalizePhone, isValidRole } = require('../utils/validators');
+const { isValidEmail, isValidPhone, normalizePhone, isValidRole } = require('../utils/validators');
 const { logActivity } = require('./activityController');
 
 // ────────────────────────────────────────────────────────────
@@ -90,12 +90,20 @@ const updateUser = async (req, res) => {
         'Access denied. You can only update your own profile.');
     }
 
-    const { first_name, last_name, role, is_active } = req.body;
+    const { first_name, last_name, email, role, is_active } = req.body;
     const phone_number = normalizePhone(req.body.phone_number);
 
-    if (!first_name && !last_name && !phone_number && role === undefined && is_active === undefined) {
+    if (!first_name && !last_name && !email && !phone_number && role === undefined && is_active === undefined) {
       return sendError(res, 400, ERROR_CODES.NO_FIELDS_TO_UPDATE,
         'No fields provided to update. Please include at least one field.');
+    }
+
+    // Email validation
+    if (email !== undefined) {
+      if (!isValidEmail(email)) {
+        return sendError(res, 400, ERROR_CODES.INVALID_EMAIL_FORMAT,
+          'Please enter a valid email address.', { field: 'email' });
+      }
     }
 
     // Role validation (admin only)
@@ -113,10 +121,22 @@ const updateUser = async (req, res) => {
 
     // Fetch current data to merge
     const currentUser = await pool.query(
-      'SELECT first_name, last_name, phone_number, role, is_active FROM users WHERE id = $1',
+      'SELECT email, first_name, last_name, phone_number, role, is_active FROM users WHERE id = $1',
       [userId]
     );
     const cur = currentUser.rows[0];
+
+    // Email uniqueness check
+    const newEmail = email ? email.toLowerCase() : cur.email;
+    if (email && email.toLowerCase() !== cur.email) {
+      const emailCheck = await pool.query(
+        'SELECT id FROM users WHERE email = $1 AND id != $2', [email.toLowerCase(), userId]);
+      if (emailCheck.rows.length > 0) {
+        return sendError(res, 409, 'EMAIL_ALREADY_IN_USE',
+          'This email is already linked to another account. Please use a different email.',
+          { field: 'email' });
+      }
+    }
 
     // Phone uniqueness check
     const newPhone = phone_number || cur.phone_number;
@@ -141,10 +161,10 @@ const updateUser = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE users
-       SET first_name = $1, last_name = $2, phone_number = $3, role = $4, is_active = $5
-       WHERE id = $6
+       SET email = $1, first_name = $2, last_name = $3, phone_number = $4, role = $5, is_active = $6
+       WHERE id = $7
        RETURNING id, email, first_name, last_name, phone_number, role, is_active, created_at, updated_at`,
-      [newFirstName, newLastName, newPhone, newRole, newIsActive, userId]
+      [newEmail, newFirstName, newLastName, newPhone, newRole, newIsActive, userId]
     );
 
     await logActivity({
