@@ -18,9 +18,13 @@ const isValidPhone = (phone) => {
 const normalizePhone = (phone) => {
   if (!phone) return phone;
   const digits = String(phone).replace(/[\s\-()]/g, '');
+  // Double prefix: +91919876543210 or 91919876543210 → strip one layer
+  if (digits.startsWith('+9191') && digits.length === 15) return '+91' + digits.slice(4);
+  if (digits.startsWith('9191') && digits.length === 14)  return '+91' + digits.slice(2);
+  // Standard cases
   if (digits.startsWith('+91') && digits.length === 13) return digits;
-  if (digits.startsWith('91') && digits.length === 12) return '+' + digits;
-  if (/^\d{10}$/.test(digits)) return '+91' + digits;
+  if (digits.startsWith('91') && digits.length === 12)  return '+' + digits;
+  if (/^\d{10}$/.test(digits))                          return '+91' + digits;
   return digits;
 };
 
