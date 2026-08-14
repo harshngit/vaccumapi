@@ -3,7 +3,7 @@ const jwt       = require('jsonwebtoken');
 const pool      = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
-const { isValidEmail, isValidPhone, isValidRole } = require('../utils/validators');
+const { isValidEmail, isValidPhone, normalizePhone, isValidRole } = require('../utils/validators');
 const { logActivity } = require('./activityController');
 
 const generateToken = (userId) =>
@@ -18,7 +18,8 @@ const sanitizeUser = ({ password, ...user }) => user;
 // ────────────────────────────────────────────────────────────
 const register = async (req, res) => {
   try {
-    const { email, first_name, last_name, phone_number, password, role } = req.body;
+    const { email, first_name, last_name, password, role } = req.body;
+    const phone_number = normalizePhone(req.body.phone_number);
 
     // Missing fields
     const missing = [];
@@ -44,7 +45,7 @@ const register = async (req, res) => {
     // Phone format
     if (!isValidPhone(phone_number)) {
       return sendError(res, 400, ERROR_CODES.INVALID_PHONE_FORMAT,
-        'Please enter a valid phone number (e.g. +911234567890).',
+        'Please enter a valid 10-digit Indian phone number (e.g. 9876543210 or +919876543210).',
         { field: 'phone_number' });
     }
 
@@ -108,7 +109,8 @@ const register = async (req, res) => {
 // ────────────────────────────────────────────────────────────
 const login = async (req, res) => {
   try {
-    const { email, phone_number, password } = req.body;
+    const { email, password } = req.body;
+    const phone_number = normalizePhone(req.body.phone_number);
 
     if (!password) {
       return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,

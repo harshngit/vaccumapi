@@ -13,6 +13,17 @@ const isValidPhone = (phone) => {
   return phoneRegex.test(phone);
 };
 
+// Normalizes Indian phone numbers to +91XXXXXXXXXX format.
+// Accepts: "9876543210", "919876543210", "+919876543210"
+const normalizePhone = (phone) => {
+  if (!phone) return phone;
+  const digits = String(phone).replace(/[\s\-()]/g, '');
+  if (digits.startsWith('+91') && digits.length === 13) return digits;
+  if (digits.startsWith('91') && digits.length === 12) return '+' + digits;
+  if (/^\d{10}$/.test(digits)) return '+91' + digits;
+  return digits;
+};
+
 const isValidRole = (role) => {
   return ['admin', 'engineer', 'labour', 'manager', 'technician'].includes(role);
 };
@@ -38,7 +49,7 @@ const isValidJobPriority = (priority) => {
 };
 
 const isValidJobCategory = (category) => {
-  return ['Service', 'AMC Visit', 'Breakdown', 'Installation & Commissioning', 'Inspection', 'Workshop'].includes(category);
+  return ['Service', 'AMC Visit', 'Breakdown', 'Installation & Commissioning', 'Inspection', 'Workshop', 'Office', 'Trial'].includes(category);
 };
 
 const isValidReportStatus = (status) => {
@@ -67,6 +78,7 @@ const computeAvatar = (name) => {
 module.exports = {
   isValidEmail,
   isValidPhone,
+  normalizePhone,
   isValidRole,
   isValidTechnicianStatus,
   isValidClientType,
