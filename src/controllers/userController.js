@@ -1,7 +1,8 @@
 const pool    = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
-const { isValidPhone, isValidRole } = require('../utils/validators');
+const bcrypt = require('bcryptjs');
+const { isValidPhone, normalizePhone, isValidRole } = require('../utils/validators');
 const { logActivity } = require('./activityController');
 
 // ────────────────────────────────────────────────────────────
@@ -89,7 +90,8 @@ const updateUser = async (req, res) => {
         'Access denied. You can only update your own profile.');
     }
 
-    const { first_name, last_name, phone_number, role, is_active } = req.body;
+    const { first_name, last_name, role, is_active } = req.body;
+    const phone_number = normalizePhone(req.body.phone_number);
 
     if (!first_name && !last_name && !phone_number && role === undefined && is_active === undefined) {
       return sendError(res, 400, ERROR_CODES.NO_FIELDS_TO_UPDATE,
@@ -216,4 +218,62 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { getUsers, updateUser, deleteUser };
+// ────────────────────────────────────────────────────────────
+// PUT /api/users/:id/password  (admin only)
+// Force-set a user's password without requiring the old one.
+// ────────────────────────────────────────────────────────────
+const adminChangePassword = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    if (isNaN(userId)) {
+      return sendError(res, 400, ERROR_CODES.INVALID_USER_ID,
+        'Invalid user ID.', { field: 'id' });
+    }
+
+    const { new_password } = req.body;
+
+    if (!new_password) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        '"new_password" is required.', { field: 'new_password' });
+    }
+
+    if (new_password.length < 6) {
+      return sendError(res, 400, ERROR_CODES.PASSWORD_TOO_SHORT,
+        'Password must be at least 6 characters long.',
+        { field: 'new_password', min_length: 6 });
+    }
+
+    const existCheck = await pool.query(
+      'SELECT id, first_name, last_name FROM users WHERE id = $1', [userId]);
+    if (existCheck.rows.length === 0) return Errors.userNotFound(res);
+
+    const hashed = await bcrypt.hash(new_password, 12);
+
+    await pool.query(
+      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+      [hashed, userId]
+    );
+
+    const user = existCheck.rows[0];
+
+    await logActivity({
+      type:         'user',
+      action:       `Admin reset password for "${user.first_name} ${user.last_name}"`,
+      entity_type:  'user',
+      entity_id:    String(userId),
+      performed_by: req.user.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Password updated successfully for user ID ${userId}.`,
+    });
+
+  } catch (error) {
+    console.error('adminChangePassword error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+module.exports = { getUsers, updateUser, deleteUser, adminChangePassword };

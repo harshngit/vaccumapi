@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { getUsers, updateUser, deleteUser } = require('../controllers/userController');
+const { getUsers, updateUser, deleteUser, adminChangePassword } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 /**
@@ -221,5 +221,54 @@ router.put('/:id', protect, updateUser);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete('/:id', protect, authorize('admin'), deleteUser);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/users/{id}/password:
+ *   put:
+ *     summary: Admin force-change a user's password (no old password required)
+ *     description: |
+ *       Admin only. Sets a new password for any user without requiring the current password.
+ *       Useful when a user forgets their password and needs a reset by admin.
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 3 }
+ *         description: ID of the user whose password to change
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [new_password]
+ *             properties:
+ *               new_password:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: "NewPass@123"
+ *           example:
+ *             new_password: "NewPass@123"
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Password updated successfully for user ID 3." }
+ *       400: { description: Missing new_password or too short }
+ *       403: { description: Admin only }
+ *       404: { description: User not found }
+ */
+router.put('/:id/password', protect, authorize('admin'), adminChangePassword);
 
 module.exports = router;
