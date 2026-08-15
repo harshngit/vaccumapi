@@ -1286,8 +1286,8 @@ const updateReport = async (req, res) => {
          client_name                  = COALESCE($16, client_name),
          client_email                 = COALESCE($17, client_email),
          status                       = $18,
-         approved_by_user_id          = CASE WHEN $18 = 'Pending' THEN NULL ELSE approved_by_user_id END,
-         approved_at                  = CASE WHEN $18 = 'Pending' THEN NULL ELSE approved_at END,
+         approved_by_user_id          = CASE WHEN $20 = 'Pending' THEN NULL ELSE approved_by_user_id END,
+         approved_at                  = CASE WHEN $20 = 'Pending' THEN NULL ELSE approved_at END,
          updated_at                   = NOW()
        WHERE id = $19`,
       [
@@ -1304,8 +1304,9 @@ const updateReport = async (req, res) => {
         report_date  || null,
         client_name  || null,
         client_email || null,
-        newStatus,
-        id,
+        newStatus,   // $18 — used only for status = $18 (report_status enum)
+        id,          // $19 — WHERE id
+        newStatus,   // $20 — used only in CASE WHEN text comparison
       ]
     );
 
