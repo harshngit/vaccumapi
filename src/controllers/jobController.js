@@ -628,8 +628,14 @@ const updateJobStatus = async (req, res) => {
 const deleteJob = async (req, res) => {
   try {
     const { id } = req.params;
-    const existCheck = await pool.query('SELECT id FROM jobs WHERE id = $1', [id]);
+    const existCheck = await pool.query('SELECT id, status FROM jobs WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.jobNotFound(res);
+
+    const { status } = existCheck.rows[0];
+    if (status === 'In Progress') {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'Jobs that are In Progress cannot be deleted.');
+    }
 
     const reportsCheck = await pool.query('SELECT id FROM reports WHERE job_id = $1 LIMIT 1', [id]);
     if (reportsCheck.rows.length > 0) {
