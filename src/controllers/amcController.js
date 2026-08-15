@@ -2,7 +2,8 @@
 // src/controllers/amcController.js
 // ============================================================
 
-const pool = require('../config/db');
+const pool    = require('../config/db');
+const ExcelJS = require('exceljs');
 const { sendError, Errors } = require('../utils/AppError');
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
@@ -1005,6 +1006,254 @@ const deleteAmcContract = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// GET /api/amc/export/excel
+// AMC Excel export — 14 columns per AMC contract
+// Optional: ?status=Active &client_id=5 &year=2026
+// ────────────────────────────────────────────────────────────
+const fmtDate = (d) => d
+  ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  : '—';
+
+const getAmcExcel = async (req, res) => {
+  try {
+    const { status, client_id, year } = req.query;
+
+    const conditions = [];
+    const values     = [];
+
+    if (status) {
+      values.push(status);
+      conditions.push(`a.status = $${values.length}`);
+    }
+    if (client_id) {
+      values.push(parseInt(client_id));
+      conditions.push(`a.client_id = $${values.length}`);
+    }
+    if (year) {
+      values.push(parseInt(year));
+      conditions.push(`EXTRACT(YEAR FROM a.start_date) = $${values.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await pool.query(
+      `SELECT
+         a.id                                                                          AS amc_id,
+         EXTRACT(YEAR FROM COALESCE(a.next_service_date, a.start_date))::int          AS year,
+         COALESCE(a.next_service_date, a.start_date)                                  AS visit_date,
+         -- Technician names from the most recent job for this client
+         (
+           SELECT string_agg(t.name, ', ' ORDER BY jt.assigned_at)
+           FROM jobs lj
+           JOIN job_technicians jt ON jt.job_id = lj.id
+           JOIN technicians t     ON t.id = jt.technician_id
+           WHERE lj.client_id = a.client_id
+             AND lj.id = (
+               SELECT id FROM jobs WHERE client_id = a.client_id
+               ORDER BY created_at DESC LIMIT 1
+             )
+         )                                                                             AS technician_names,
+         c.name                                                                        AS client_name,
+         -- Visit category from the most recent job
+         (
+           SELECT j2.category FROM jobs j2
+           WHERE j2.client_id = a.client_id
+           ORDER BY j2.created_at DESC LIMIT 1
+         )                                                                             AS visit_category,
+         -- Service report: any report received for any job of this client
+         CASE WHEN EXISTS (
+           SELECT 1 FROM reports r
+           JOIN jobs j3 ON j3.id = r.job_id
+           WHERE j3.client_id = a.client_id
+         ) THEN 'Received' ELSE 'Not Received' END                                    AS service_report_status,
+         -- Pending visit: any open job for this client
+         CASE WHEN EXISTS (
+           SELECT 1 FROM jobs j4
+           WHERE j4.client_id = a.client_id
+             AND j4.status NOT IN ('Closed', 'Cancelled')
+         ) THEN 'Yes' ELSE 'No' END                                                   AS pending_visit,
+         a.status                                                                      AS amc_po_status,
+         a.service_date_1,
+         a.service_date_2,
+         a.service_date_3,
+         a.service_date_4,
+         a.service_date_5,
+         a.service_date_6
+       FROM amc_contracts a
+       LEFT JOIN clients c ON c.id = a.client_id
+       ${where}
+       ORDER BY a.created_at DESC`,
+      values
+    );
+
+    const rows = result.rows;
+
+    // ── Build workbook ───────────────────────────────────────
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'VDTI Service Hub';
+    wb.created = new Date();
+
+    const ws = wb.addWorksheet('AMC Contracts');
+
+    // ── Title ────────────────────────────────────────────────
+    ws.mergeCells('A1:N1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = `AMC Contract Report${year ? ` — ${year}` : ''}${status ? ` (${status})` : ''}`;
+    titleCell.font      = { bold: true, size: 16, color: { argb: 'FF1F2937' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 35;
+
+    // ── Info row ─────────────────────────────────────────────
+    ws.mergeCells('A2:N2');
+    const infoCell = ws.getCell('A2');
+    infoCell.value = `Generated on: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}  |  Total Contracts: ${rows.length}`;
+    infoCell.font      = { size: 10, italic: true, color: { argb: 'FF6B7280' } };
+    infoCell.alignment = { horizontal: 'center' };
+
+    ws.addRow([]);
+
+    // ── Headers ──────────────────────────────────────────────
+    const headers = [
+      'Year', 'Date', 'Technician Name', 'Client Name',
+      'Visit Category', 'Service Report', 'Pending Visit', 'AMC PO Status',
+      '1st Visit Date', '2nd Visit Date', '3rd Visit Date',
+      '4th Visit Date', '5th Visit Date', '6th Visit Date',
+    ];
+
+    const headerRow = ws.addRow(headers);
+    headerRow.height = 30;
+    headerRow.eachCell((cell) => {
+      cell.font      = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border    = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+    });
+
+    const amcStatusColors = {
+      'Active':        'FF065F46',
+      'Expiring Soon': 'FFB45309',
+      'Expired':       'FFB91C1C',
+    };
+
+    // ── Data rows ────────────────────────────────────────────
+    rows.forEach((v, i) => {
+      const row = ws.addRow([
+        v.year || '—',
+        v.visit_date ? fmtDate(v.visit_date) : '—',
+        v.technician_names || 'Not Assigned',
+        v.client_name      || '—',
+        v.visit_category   || '—',
+        v.service_report_status,
+        v.pending_visit,
+        v.amc_po_status,
+        fmtDate(v.service_date_1),
+        fmtDate(v.service_date_2),
+        fmtDate(v.service_date_3),
+        fmtDate(v.service_date_4),
+        fmtDate(v.service_date_5),
+        fmtDate(v.service_date_6),
+      ]);
+
+      row.eachCell((cell) => {
+        cell.alignment = { vertical: 'middle', wrapText: true };
+        cell.border    = {
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+        };
+      });
+
+      // Alternate row shading
+      if (i % 2 === 1) {
+        row.eachCell((cell) => {
+          if (!cell.fill || !cell.fill.fgColor || cell.fill.fgColor.argb === 'FF000000') {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+          }
+        });
+      }
+
+      // Service Report (col 6)
+      const srCell = row.getCell(6);
+      srCell.font      = { bold: true, color: { argb: v.service_report_status === 'Received' ? 'FF065F46' : 'FFB91C1C' } };
+      srCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // Pending Visit (col 7)
+      const pvCell = row.getCell(7);
+      pvCell.font      = { bold: true, color: { argb: v.pending_visit === 'Yes' ? 'FFB45309' : 'FF065F46' } };
+      pvCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // AMC PO Status (col 8)
+      const amcCell = row.getCell(8);
+      amcCell.font      = { bold: true, color: { argb: amcStatusColors[v.amc_po_status] || 'FF6B7280' } };
+      amcCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // Year (col 1)
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    // ── Column widths ────────────────────────────────────────
+    ws.columns = [
+      { width: 8  },  // Year
+      { width: 16 },  // Date
+      { width: 26 },  // Technician Name
+      { width: 26 },  // Client Name
+      { width: 22 },  // Visit Category
+      { width: 20 },  // Service Report
+      { width: 14 },  // Pending Visit
+      { width: 16 },  // AMC PO Status
+      { width: 15 },  // 1st Visit Date
+      { width: 15 },  // 2nd Visit Date
+      { width: 15 },  // 3rd Visit Date
+      { width: 15 },  // 4th Visit Date
+      { width: 15 },  // 5th Visit Date
+      { width: 15 },  // 6th Visit Date
+    ];
+
+    // ── Summary section ──────────────────────────────────────
+    ws.addRow([]);
+    ws.addRow([]);
+    ws.addRow(['Summary']).getCell(1).font = { bold: true, size: 13 };
+
+    const statusCounts = {};
+    let receivedCount  = 0;
+    let pendingCount   = 0;
+    for (const v of rows) {
+      statusCounts[v.amc_po_status] = (statusCounts[v.amc_po_status] || 0) + 1;
+      if (v.service_report_status === 'Received') receivedCount++;
+      if (v.pending_visit === 'Yes')              pendingCount++;
+    }
+
+    ws.addRow(['AMC Status Breakdown']).getCell(1).font = { bold: true, size: 11 };
+    for (const [stat, count] of Object.entries(statusCounts)) {
+      ws.addRow(['', stat, count]);
+    }
+    ws.addRow(['', 'Total', rows.length]).getCell(3).font = { bold: true };
+
+    ws.addRow([]);
+    ws.addRow(['Service Report Summary']).getCell(1).font = { bold: true, size: 11 };
+    ws.addRow(['', 'Received',     receivedCount]);
+    ws.addRow(['', 'Not Received', rows.length - receivedCount]);
+    ws.addRow(['', 'Pending Visits', pendingCount]);
+
+    // ── Send file ─────────────────────────────────────────────
+    const filename = `AMC_Report${year ? `_${year}` : ''}${status ? `_${status}` : ''}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await wb.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('AMC Excel export error:', error);
+    if (!res.headersSent) return Errors.internalError(res);
+  }
+};
+
 module.exports = {
   getAmcContracts,
   createAmcContract,
@@ -1013,6 +1262,7 @@ module.exports = {
   updateAmcContract,
   deleteAmcContract,
   sendAmcEmail,
+  getAmcExcel,
   // Email builders exported so amcExpiryJob can use them
   buildAmcRenewalEmail,
   buildServiceReminderEmail,

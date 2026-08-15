@@ -12,6 +12,7 @@ const {
   updateAmcContract,
   deleteAmcContract,
   sendAmcEmail,
+  getAmcExcel,
 } = require('../controllers/amcController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -37,6 +38,42 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *         description: List of expiring contracts
  */
 router.get('/expiring', protect, authorize('admin', 'manager'), getExpiringContracts);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/amc/export/excel:
+ *   get:
+ *     summary: Export AMC contracts to Excel (.xlsx)
+ *     tags: [AMC Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Active, Expiring Soon, Expired]
+ *         description: Filter by AMC status
+ *       - in: query
+ *         name: client_id
+ *         schema: { type: integer }
+ *         description: Filter by client
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
+ *         description: Filter by contract start year (e.g. 2026)
+ *     responses:
+ *       200:
+ *         description: Excel file download
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+router.get('/export/excel', protect, authorize('admin', 'manager'), getAmcExcel);
 
 // ────────────────────────────────────────────────────────────
 
