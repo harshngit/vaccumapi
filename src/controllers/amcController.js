@@ -463,11 +463,12 @@ const getAmcContracts = async (req, res) => {
 
     const contracts = result.rows;
     for (const contract of contracts) {
-      const svc = await pool.query(
-        'SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id',
-        [contract.id]
-      );
+      const [svc, pumpsRes] = await Promise.all([
+        pool.query('SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id', [contract.id]),
+        pool.query('SELECT id, serial_number, model_number FROM amc_pumps WHERE amc_id = $1 ORDER BY id', [contract.id]),
+      ]);
       contract.services = svc.rows.map(r => r.service_name);
+      contract.pumps    = pumpsRes.rows;
     }
 
     return res.status(200).json({
@@ -491,7 +492,7 @@ const createAmcContract = async (req, res) => {
     const {
       client_id, title, start_date, end_date, value,
       next_service_date, renewal_reminder_days = 30,
-      services = [], po_number,
+      services = [], pumps = [], po_number,
       visit_count, pumps_count, per_pump_price, total_price, gst_percent,
       last_service_date, breakdown_visit_count,
       service_date_1, service_date_2, service_date_3,
@@ -597,9 +598,24 @@ const createAmcContract = async (req, res) => {
       }
     }
 
+    if (pumps.length > 0) {
+      for (const pump of pumps) {
+        if (!pump.serial_number || !pump.model_number) continue;
+        await dbClient.query(
+          'INSERT INTO amc_pumps (amc_id, serial_number, model_number) VALUES ($1, $2, $3)',
+          [amcId, pump.serial_number.trim(), pump.model_number.trim()]
+        );
+      }
+    }
+
     await dbClient.query('COMMIT');
 
+    const pumpsRows = await pool.query(
+      'SELECT id, serial_number, model_number FROM amc_pumps WHERE amc_id = $1 ORDER BY id',
+      [amcId]
+    );
     contract.services    = services;
+    contract.pumps       = pumpsRows.rows;
     contract.client_name = clientRow.name;
     contract.client_email = clientRow.email;
     contract.days_left   = Math.ceil((new Date(end_date) - new Date()) / (1000 * 60 * 60 * 24));
@@ -716,10 +732,12 @@ const getAmcById = async (req, res) => {
     }
 
     const contract = result.rows[0];
-    const svc = await pool.query(
-      'SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id', [id]
-    );
+    const [svc, pumpsRes] = await Promise.all([
+      pool.query('SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id', [id]),
+      pool.query('SELECT id, serial_number, model_number FROM amc_pumps WHERE amc_id = $1 ORDER BY id', [id]),
+    ]);
     contract.services = svc.rows.map(r => r.service_name);
+    contract.pumps    = pumpsRes.rows;
 
     return res.status(200).json({ success: true, data: contract });
 
@@ -812,7 +830,7 @@ const updateAmcContract = async (req, res) => {
     const {
       title, end_date, value,
       next_service_date, renewal_reminder_days,
-      services, po_number,
+      services, pumps, po_number,
       visit_count, pumps_count, per_pump_price, total_price, gst_percent,
       last_service_date, breakdown_visit_count,
       service_date_1, service_date_2, service_date_3,
@@ -910,13 +928,26 @@ const updateAmcContract = async (req, res) => {
       }
     }
 
+    if (Array.isArray(pumps)) {
+      await dbClient.query('DELETE FROM amc_pumps WHERE amc_id = $1', [id]);
+      for (const pump of pumps) {
+        if (!pump.serial_number || !pump.model_number) continue;
+        await dbClient.query(
+          'INSERT INTO amc_pumps (amc_id, serial_number, model_number) VALUES ($1, $2, $3)',
+          [id, pump.serial_number.trim(), pump.model_number.trim()]
+        );
+      }
+    }
+
     await dbClient.query('COMMIT');
 
     const updated = result.rows[0];
-    const svc = await pool.query(
-      'SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id', [id]
-    );
+    const [svc, pumpsRes] = await Promise.all([
+      pool.query('SELECT service_name FROM amc_services WHERE amc_id = $1 ORDER BY id', [id]),
+      pool.query('SELECT id, serial_number, model_number FROM amc_pumps WHERE amc_id = $1 ORDER BY id', [id]),
+    ]);
     updated.services = svc.rows.map(r => r.service_name);
+    updated.pumps    = pumpsRes.rows;
 
     await logActivity({
       type:         'amc',
