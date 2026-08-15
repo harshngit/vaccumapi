@@ -1215,8 +1215,188 @@ const getMyReports = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// PUT /api/reports/:id
+// Edit a report — only allowed while status is 'Pending'.
+// Admin can edit any Pending report; technician can only edit their own.
+// Replaces checklist_items, issue_observations, mandatory_spares when provided.
+// ────────────────────────────────────────────────────────────
+const updateReport = async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const existCheck = await dbClient.query(
+      `SELECT r.*, t.user_id AS technician_user_id
+       FROM reports r
+       LEFT JOIN technicians t ON t.id = r.technician_id
+       WHERE r.id = $1`,
+      [id]
+    );
+    if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    const cur = existCheck.rows[0];
+
+    if (cur.status !== 'Pending') {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        `Report cannot be edited after it has been ${cur.status.toLowerCase()}.`);
+    }
+
+    // Technician can only edit their own report
+    const isAdmin = ['admin', 'manager'].includes(req.user.role);
+    if (!isAdmin && cur.technician_user_id !== req.user.id) {
+      return sendError(res, 403, ERROR_CODES.FORBIDDEN,
+        'You can only edit your own reports.');
+    }
+
+    const {
+      title, findings, recommendations, remarks, location, serial_no, comments,
+      company_name, contact_person, model_serial_installation,
+      operating_hours_per_day, application_process_description,
+      vdt_representative_name, client_representative_name,
+      report_date, client_name, client_email,
+      checklist_items, issue_observations, mandatory_spares,
+    } = req.body;
+
+    await dbClient.query('BEGIN');
+
+    await dbClient.query(
+      `UPDATE reports SET
+         title                        = COALESCE($1,  title),
+         findings                     = COALESCE($2,  findings),
+         recommendations              = COALESCE($3,  recommendations),
+         remarks                      = COALESCE($4,  remarks),
+         location                     = COALESCE($5,  location),
+         serial_no                    = COALESCE($6,  serial_no),
+         comments                     = COALESCE($7,  comments),
+         company_name                 = COALESCE($8,  company_name),
+         contact_person               = COALESCE($9,  contact_person),
+         model_serial_installation    = COALESCE($10, model_serial_installation),
+         operating_hours_per_day      = COALESCE($11, operating_hours_per_day),
+         application_process_description = COALESCE($12, application_process_description),
+         vdt_representative_name      = COALESCE($13, vdt_representative_name),
+         client_representative_name   = COALESCE($14, client_representative_name),
+         report_date                  = COALESCE($15, report_date),
+         client_name                  = COALESCE($16, client_name),
+         client_email                 = COALESCE($17, client_email),
+         updated_at                   = NOW()
+       WHERE id = $18`,
+      [
+        title        ? title.trim() : null,
+        findings     || null, recommendations || null,
+        remarks      || null, location        || null,
+        serial_no    || null, comments        || null,
+        company_name || null, contact_person  || null,
+        model_serial_installation    || null,
+        operating_hours_per_day      || null,
+        application_process_description || null,
+        vdt_representative_name      || null,
+        client_representative_name   || null,
+        report_date  || null,
+        client_name  || null,
+        client_email || null,
+        id,
+      ]
+    );
+
+    // Replace checklist_items if provided
+    if (Array.isArray(checklist_items)) {
+      await dbClient.query('DELETE FROM report_checklist_items WHERE report_id = $1', [id]);
+      for (const item of checklist_items) {
+        await dbClient.query(
+          `INSERT INTO report_checklist_items (report_id, sr, description, status)
+           VALUES ($1, $2, $3, $4)`,
+          [id, item.sr, item.description, item.status || null]
+        );
+      }
+    }
+
+    // Replace issue_observations if provided
+    if (Array.isArray(issue_observations)) {
+      await dbClient.query('DELETE FROM report_issue_observations WHERE report_id = $1', [id]);
+      for (const obs of issue_observations) {
+        await dbClient.query(
+          `INSERT INTO report_issue_observations
+             (report_id, sr, issue, observation, impact_on_pump, severity, recommended_spares)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [id, obs.sr || null, obs.issue || null, obs.observation || null,
+           obs.impact_on_pump || null, obs.severity || null, obs.recommended_spares || null]
+        );
+      }
+    }
+
+    // Replace mandatory_spares if provided
+    if (Array.isArray(mandatory_spares)) {
+      await dbClient.query('DELETE FROM report_mandatory_spares WHERE report_id = $1', [id]);
+      for (const spare of mandatory_spares) {
+        await dbClient.query(
+          `INSERT INTO report_mandatory_spares (report_id, spare_name, pump_model, total_to_order)
+           VALUES ($1,$2,$3,$4)`,
+          [id, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]
+        );
+      }
+    }
+
+    await dbClient.query('COMMIT');
+
+    logActivity({
+      type:         'report',
+      action:       `Report ${id} updated`,
+      entity_type:  'report',
+      entity_id:    id,
+      performed_by: req.user.id,
+    }).catch(e => console.error('[report activity]', e.message));
+
+    return res.status(200).json({
+      success: true,
+      message: `Report ${id} updated successfully.`,
+    });
+
+  } catch (error) {
+    await dbClient.query('ROLLBACK');
+    console.error('Update report error:', error);
+    if (!res.headersSent) return Errors.internalError(res);
+  } finally {
+    dbClient.release();
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// DELETE /api/reports/:id — admin only
+// Permanently deletes a report and all child rows (cascade).
+// ────────────────────────────────────────────────────────────
+const deleteReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existCheck = await pool.query(
+      'SELECT id, title, status FROM reports WHERE id = $1', [id]
+    );
+    if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    await pool.query('DELETE FROM reports WHERE id = $1', [id]);
+
+    logActivity({
+      type:         'report',
+      action:       `Report ${id} permanently deleted — "${existCheck.rows[0].title}"`,
+      entity_type:  'report',
+      entity_id:    id,
+      performed_by: req.user.id,
+    }).catch(e => console.error('[report activity]', e.message));
+
+    return res.status(200).json({
+      success: true,
+      message: `Report ${id} deleted successfully.`,
+    });
+
+  } catch (error) {
+    console.error('Delete report error:', error);
+    return Errors.internalError(res);
+  }
+};
+
 module.exports = {
   getReports, createReport, getReportById,
   generateReportPdf, shareReport, updateReportStatus, addReportImage,
-  addReportDocumentLink, getMyReports,
+  addReportDocumentLink, getMyReports, updateReport, deleteReport,
 };

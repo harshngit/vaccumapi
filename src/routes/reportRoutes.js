@@ -14,6 +14,8 @@ const {
   addReportImage,
   addReportDocumentLink,
   getMyReports,
+  updateReport,
+  deleteReport,
 } = require('../controllers/reportController');
 const {
   getMonthlyVisitExcel,
@@ -768,5 +770,125 @@ router.post('/:id/images', protect, addReportImage);
  *         description: Report not found
  */
 router.post('/:id/documents', protect, addReportDocumentLink);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/reports/{id}:
+ *   put:
+ *     summary: Edit a report (Pending status only)
+ *     description: |
+ *       Updates report fields. Only allowed while status is **Pending** —
+ *       once Approved or Rejected the report is locked.
+ *
+ *       - **Admin / Manager**: can edit any Pending report.
+ *       - **Technician**: can only edit their own report.
+ *
+ *       If `checklist_items`, `issue_observations`, or `mandatory_spares` arrays
+ *       are provided they fully replace the existing entries. Omit them to leave
+ *       them unchanged.
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *         example: RPT-0001
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:                          { type: string }
+ *               findings:                       { type: string }
+ *               recommendations:                { type: string }
+ *               remarks:                        { type: string }
+ *               location:                       { type: string }
+ *               serial_no:                      { type: string }
+ *               comments:                       { type: string }
+ *               company_name:                   { type: string }
+ *               contact_person:                 { type: string }
+ *               model_serial_installation:      { type: string }
+ *               operating_hours_per_day:        { type: string }
+ *               application_process_description:{ type: string }
+ *               vdt_representative_name:        { type: string }
+ *               client_representative_name:     { type: string }
+ *               report_date:                    { type: string, format: date }
+ *               client_name:                    { type: string }
+ *               client_email:                   { type: string }
+ *               checklist_items:
+ *                 type: array
+ *                 description: Fully replaces existing checklist items when provided
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     sr:          { type: integer }
+ *                     description: { type: string }
+ *                     status:      { type: string }
+ *               issue_observations:
+ *                 type: array
+ *                 description: Fully replaces existing observations when provided
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     sr:                 { type: integer }
+ *                     issue:              { type: string }
+ *                     observation:        { type: string }
+ *                     impact_on_pump:     { type: string }
+ *                     severity:           { type: string, enum: [Low, Med, High] }
+ *                     recommended_spares: { type: string }
+ *               mandatory_spares:
+ *                 type: array
+ *                 description: Fully replaces existing spares when provided
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     spare_name:     { type: string }
+ *                     pump_model:     { type: string }
+ *                     total_to_order: { type: string }
+ *     responses:
+ *       200:
+ *         description: Report updated successfully
+ *       400:
+ *         description: Report is already Approved or Rejected
+ *       403:
+ *         description: Not your report
+ *       404:
+ *         description: Report not found
+ */
+router.put('/:id', protect, updateReport);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/reports/{id}:
+ *   delete:
+ *     summary: Permanently delete a report (admin only)
+ *     description: |
+ *       Deletes the report and all child records (checklist items, issue observations,
+ *       mandatory spares, images, document links, technical reports).
+ *       This action cannot be undone.
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *         example: RPT-0001
+ *     responses:
+ *       200:
+ *         description: Report deleted successfully
+ *       404:
+ *         description: Report not found
+ */
+router.delete('/:id', protect, authorize('admin'), deleteReport);
 
 module.exports = router;
