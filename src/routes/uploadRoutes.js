@@ -4,10 +4,10 @@
 
 const express  = require('express');
 const router   = express.Router();
-const { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, deleteFile } = require('../controllers/uploadController');
+const { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, uploadReportFiles, deleteFile } = require('../controllers/uploadController');
 const { uploadTechnicianDocFiles } = require('../controllers/technicianDocController');
 const { protect } = require('../middleware/authMiddleware');
-const { upload, uploadDocs, handleUploadErrors } = require('../middleware/uploadMiddleware');
+const { upload, uploadDocs, uploadAny, handleUploadErrors } = require('../middleware/uploadMiddleware');
 
 /**
  * @swagger
@@ -182,6 +182,77 @@ router.post(
   protect,
   handleUploadErrors(uploadDocs.array('files', 10)),
   uploadDocumentLinks
+);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/upload/report-files:
+ *   post:
+ *     summary: Upload report attachments — images, PDFs, or any file type (no report ID needed)
+ *     description: |
+ *       Upload one or more files **before** creating or editing a report.
+ *       Images and technical documents are treated identically — any file type is accepted.
+ *
+ *       **Typical flow:**
+ *       1. Call `POST /api/upload/report-files` with your files (field name: `files`).
+ *       2. Take the `file_name` + `file_url` from each item in the response `data[]`.
+ *       3. Pass those objects in the `technical_reports[]` array when calling
+ *          `POST /api/reports` or `PUT /api/reports/:id`.
+ *
+ *       **Accepted types:** Any — JPEG, PNG, WebP, PDF, DOC, DOCX, and more.
+ *       **Limits:** Max 20MB per file, max 10 files per request.
+ *     tags: [Upload]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [files]
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: One or more files (image, PDF, Word, etc.)
+ *     responses:
+ *       201:
+ *         description: Files uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string }
+ *                 note:
+ *                   type: string
+ *                   example: Pass these objects in the technical_reports[] array when calling POST /api/reports or PUT /api/reports/:id.
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:              { type: integer }
+ *                       file_name:       { type: string, example: photo.jpg }
+ *                       stored_name:     { type: string }
+ *                       file_url:        { type: string, example: 'https://yourserver.com/uploads/1714012345678_photo.jpg' }
+ *                       mime_type:       { type: string, example: image/jpeg }
+ *                       file_size_bytes: { type: integer }
+ *                       uploaded_at:     { type: string, format: date-time }
+ *       400:
+ *         description: No files attached or file too large
+ */
+router.post(
+  '/report-files',
+  protect,
+  handleUploadErrors(uploadAny.array('files', 10)),
+  uploadReportFiles
 );
 
 // ────────────────────────────────────────────────────────────

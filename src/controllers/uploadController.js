@@ -197,6 +197,70 @@ const uploadDocumentLinks = async (req, res) => {
 };
 
 // ────────────────────────────────────────────────────────────
+// POST /api/upload/report-files
+// Upload ANY file (image, PDF, Word, etc.) without a report ID.
+// Use BEFORE creating or editing a report:
+//   1. Upload here → get file_url + file_name back
+//   2. Pass those in technical_reports[] when calling POST/PUT /api/reports
+//
+// Body: multipart/form-data, field: files (1–10 files, any type, max 20MB each)
+// ────────────────────────────────────────────────────────────
+const uploadReportFiles = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        'No files uploaded. Please attach at least one file under the "files" field.');
+    }
+
+    const uploaded = [];
+
+    for (const file of req.files) {
+      const fileUrl = getFileUrl(req, file.filename);
+
+      const result = await pool.query(
+        `INSERT INTO uploads
+           (original_name, stored_name, file_url, mime_type, file_size_bytes,
+            entity_type, entity_id, uploaded_by_user_id)
+         VALUES ($1, $2, $3, $4, $5, 'report_file', NULL, $6)
+         RETURNING id, original_name, stored_name, file_url, mime_type,
+                   file_size_bytes, uploaded_at`,
+        [
+          file.originalname,
+          file.filename,
+          fileUrl,
+          file.mimetype,
+          file.size,
+          req.user.id,
+        ]
+      );
+
+      const row = result.rows[0];
+
+      uploaded.push({
+        id:              row.id,
+        file_name:       row.original_name,
+        stored_name:     row.stored_name,
+        file_url:        row.file_url,
+        mime_type:       row.mime_type,
+        file_size_bytes: row.file_size_bytes,
+        uploaded_at:     row.uploaded_at,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${uploaded.length} file(s) uploaded successfully.`,
+      data:    uploaded,
+      note:    'Pass these objects in the technical_reports[] array when calling POST /api/reports or PUT /api/reports/:id.',
+    });
+
+  } catch (error) {
+    console.error('Upload report files error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
 // DELETE /api/upload/:id
 // Deletes file from disk AND removes DB record
 // ────────────────────────────────────────────────────────────
@@ -238,4 +302,4 @@ const deleteFile = async (req, res) => {
   }
 };
 
-module.exports = { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, deleteFile };
+module.exports = { uploadFiles, uploadTechnicalReports, uploadDocumentLinks, uploadReportFiles, deleteFile };

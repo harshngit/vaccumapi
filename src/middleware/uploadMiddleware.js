@@ -81,6 +81,15 @@ const uploadDocs = multer({
   },
 });
 
+// For POST /api/upload/report-files  (any file type — images, PDFs, etc.)
+const uploadAny = multer({
+  storage,
+  limits: {
+    fileSize: MAX_DOC_SIZE_MB * 1024 * 1024,
+    files:    10,
+  },
+});
+
 // ─── Error handler wrapper ────────────────────────────────────
 const handleUploadErrors = (uploadMiddleware) => {
   return (req, res, next) => {
@@ -116,4 +125,4 @@ const getFileUrl = (req, filename) => {
   return `${base.replace(/\/$/, '')}/uploads/${filename}`;
 };
 
-module.exports = { upload, uploadDocs, handleUploadErrors, getFileUrl, UPLOAD_DIR };
+module.exports = { upload, uploadDocs, uploadAny, handleUploadErrors, getFileUrl, UPLOAD_DIR };

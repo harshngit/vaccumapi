@@ -765,6 +765,7 @@ const createReport = async (req, res) => {
       po_number, location, serial_no, comments,
       client_id, client_name, client_email,
       technical_reports = [],
+      images = [],          // alias — treated same as technical_reports
       upload_document_link = [],
       company_name, contact_person,
       model_serial_installation, operating_hours_per_day,
@@ -780,13 +781,15 @@ const createReport = async (req, res) => {
     if (missing.length > 0) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, `Please fill in all required fields: ${missing.join(', ')}.`, { missing_fields: missing });
 
     if (!Array.isArray(technical_reports))     return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'technical_reports must be an array.', { field: 'technical_reports' });
+    if (!Array.isArray(images))               return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'images must be an array.', { field: 'images' });
     if (!Array.isArray(upload_document_link))  return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'upload_document_link must be an array.', { field: 'upload_document_link' });
     if (!Array.isArray(checklist_items))    return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'checklist_items must be an array.', { field: 'checklist_items' });
     if (!Array.isArray(issue_observations)) return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'issue_observations must be an array.', { field: 'issue_observations' });
     if (!Array.isArray(mandatory_spares))   return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR, 'mandatory_spares must be an array.', { field: 'mandatory_spares' });
 
-    for (let i = 0; i < technical_reports.length; i++) {
-      if (!technical_reports[i].file_name || !technical_reports[i].file_url)
+    const allFiles = [...technical_reports, ...images];
+    for (let i = 0; i < allFiles.length; i++) {
+      if (!allFiles[i].file_name || !allFiles[i].file_url)
         return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, `technical_reports[${i}] must have both file_name and file_url.`, { field: `technical_reports[${i}]` });
     }
 
@@ -849,7 +852,7 @@ const createReport = async (req, res) => {
         [reportId, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]);
 
     const savedTechnicalReports = [];
-    for (const doc of technical_reports) {
+    for (const doc of allFiles) {
       const tr = await dbClient.query(
         `INSERT INTO technical_reports (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, file_name, file_url, mime_type, file_size_bytes, uploaded_at`,
@@ -931,8 +934,11 @@ const getReportById = async (req, res) => {
       pool.query(`SELECT spare_name, pump_model, total_to_order FROM report_mandatory_spares WHERE report_id = $1 ORDER BY id ASC`, [id]),
       pool.query(`SELECT id, file_name, file_url, mime_type, file_size_bytes, uploaded_at FROM report_document_links WHERE report_id = $1 ORDER BY uploaded_at ASC`, [id]),
     ]);
-    report.images               = images.rows;
-    report.technical_reports    = techReports.rows;
+    // Merge report_images + technical_reports into one unified list
+    report.technical_reports = [
+      ...images.rows,
+      ...techReports.rows,
+    ].sort((a, b) => new Date(a.uploaded_at) - new Date(b.uploaded_at));
     report.checklist_items      = checklist.rows;
     report.issue_observations   = issues.rows;
     report.mandatory_spares     = spares.rows;
@@ -1063,13 +1069,8 @@ const addReportImage = async (req, res) => {
     const images = Array.isArray(req.body) ? req.body : [req.body];
     const existCheck = await pool.query('SELECT id FROM reports WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
-    const countCheck = await pool.query('SELECT COUNT(*) FROM report_images WHERE report_id = $1', [id]);
-    const current = parseInt(countCheck.rows[0].count);
-    if (current + images.length > 20) return sendError(res, 400, ERROR_CODES.TOO_MANY_IMAGES, `Cannot add ${images.length} image(s). Maximum 20 images per report (currently has ${current}).`);
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     for (const img of images) {
-      if (!img.file_name || !img.file_url) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'Each image must have file_name and file_url.', { missing_fields: ['file_name', 'file_url'] });
-      if (img.mime_type && !allowed.includes(img.mime_type)) return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE, `Invalid file type "${img.mime_type}".`, { field: 'mime_type', allowed });
+      if (!img.file_name || !img.file_url) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'Each file must have file_name and file_url.', { missing_fields: ['file_name', 'file_url'] });
     }
     const inserted = [];
     for (const img of images) {
@@ -1256,6 +1257,8 @@ const updateReport = async (req, res) => {
       vdt_representative_name, client_representative_name,
       report_date, client_name, client_email,
       checklist_items, issue_observations, mandatory_spares,
+      technical_reports,    // optional: replaces all attachments when provided
+      images,               // alias for technical_reports
     } = req.body;
 
     await dbClient.query('BEGIN');
@@ -1340,6 +1343,20 @@ const updateReport = async (req, res) => {
           `INSERT INTO report_mandatory_spares (report_id, spare_name, pump_model, total_to_order)
            VALUES ($1,$2,$3,$4)`,
           [id, spare.spare_name, spare.pump_model || null, spare.total_to_order || null]
+        );
+      }
+    }
+
+    // Replace technical_reports/images if provided (merged — any file type)
+    const fileUpdates = technical_reports || images;
+    if (Array.isArray(fileUpdates)) {
+      await dbClient.query('DELETE FROM technical_reports WHERE report_id = $1', [id]);
+      for (const doc of fileUpdates) {
+        if (!doc.file_name || !doc.file_url) continue;
+        await dbClient.query(
+          `INSERT INTO technical_reports (report_id, file_name, file_url, mime_type, file_size_bytes, uploaded_by_user_id)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [id, doc.file_name, doc.file_url, doc.mime_type || null, doc.file_size_bytes || null, req.user.id]
         );
       }
     }
