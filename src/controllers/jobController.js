@@ -67,17 +67,21 @@ const getJobs = async (req, res) => {
     const result = await pool.query(
       `SELECT
          j.id, j.title, j.description,
-         j.client_id,     c.name  AS client_name,
-         j.technician_id, t.name  AS technician_name,
-         j.amc_id,        a.title AS amc_title,
+         j.client_id, c.name AS client_name,
+         j.amc_id,    a.title AS amc_title,
          j.status, j.priority, j.category, j.amount,
-         j.raised_date, j.scheduled_date, j.closed_date,
+         j.raised_date, j.scheduled_date, j.start_date, j.end_date, j.closed_date,
          j.raised_by_user_id,
          (SELECT COUNT(*) FROM job_images ji WHERE ji.job_id = j.id) AS image_count,
+         (
+           SELECT COALESCE(json_agg(json_build_object('id', t2.id, 'name', t2.name, 'phone', t2.phone) ORDER BY jt.assigned_at), '[]'::json)
+           FROM job_technicians jt
+           JOIN technicians t2 ON t2.id = jt.technician_id
+           WHERE jt.job_id = j.id
+         ) AS technicians,
          j.created_at, j.updated_at
        FROM jobs j
        LEFT JOIN clients       c ON c.id = j.client_id
-       LEFT JOIN technicians   t ON t.id = j.technician_id
        LEFT JOIN amc_contracts a ON a.id = j.amc_id
        ${where}
        ORDER BY j.created_at DESC
@@ -119,7 +123,7 @@ const getJobsByUser = async (req, res) => {
     }
     const technician = techRow.rows[0];
 
-    const conditions = [`j.technician_id = $1`];
+    const conditions = [`EXISTS (SELECT 1 FROM job_technicians jt WHERE jt.job_id = j.id AND jt.technician_id = $1)`];
     const values     = [technician.id];
 
     if (status) {
@@ -140,17 +144,21 @@ const getJobsByUser = async (req, res) => {
     const result = await pool.query(
       `SELECT
          j.id, j.title, j.description,
-         j.client_id,     c.name  AS client_name,
-         j.technician_id, t.name  AS technician_name,
-         j.amc_id,        a.title AS amc_title,
+         j.client_id, c.name AS client_name,
+         j.amc_id,    a.title AS amc_title,
          j.status, j.priority, j.category, j.amount,
-         j.raised_date, j.scheduled_date, j.closed_date,
+         j.raised_date, j.scheduled_date, j.start_date, j.end_date, j.closed_date,
          j.raised_by_user_id,
          (SELECT COUNT(*) FROM job_images ji WHERE ji.job_id = j.id) AS image_count,
+         (
+           SELECT COALESCE(json_agg(json_build_object('id', t2.id, 'name', t2.name, 'phone', t2.phone) ORDER BY jt.assigned_at), '[]'::json)
+           FROM job_technicians jt
+           JOIN technicians t2 ON t2.id = jt.technician_id
+           WHERE jt.job_id = j.id
+         ) AS technicians,
          j.created_at, j.updated_at
        FROM jobs j
        LEFT JOIN clients       c ON c.id = j.client_id
-       LEFT JOIN technicians   t ON t.id = j.technician_id
        LEFT JOIN amc_contracts a ON a.id = j.amc_id
        ${where}
        ORDER BY j.created_at DESC
@@ -178,10 +186,18 @@ const createJob = async (req, res) => {
   const dbClient = await pool.connect();
   try {
     const {
-      title, description, client_id, technician_id,
+      title, description, client_id,
+      technician_ids,           // array: [1, 2, 3]
       priority = 'Medium', category = 'Service',
-      scheduled_date, amount = 0, amc_id,
+      scheduled_date,           // single-day mode
+      start_date, end_date,     // date-range mode
+      amount = 0, amc_id,
     } = req.body;
+
+    // Normalise technician_ids — accept array or single value
+    const techIds = Array.isArray(technician_ids)
+      ? technician_ids.map(Number).filter(Boolean)
+      : technician_ids ? [Number(technician_ids)] : [];
 
     const missing = [];
     if (!title)     missing.push('title');
@@ -192,28 +208,45 @@ const createJob = async (req, res) => {
         { missing_fields: missing });
     }
 
+    // Date validation: use either scheduled_date OR start_date/end_date, not both
+    if (scheduled_date && (start_date || end_date)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'Use either scheduled_date (single day) OR start_date + end_date (range), not both.',
+        { fields: ['scheduled_date', 'start_date', 'end_date'] });
+    }
+    if ((start_date && !end_date) || (!start_date && end_date)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'Provide both start_date and end_date together.',
+        { fields: ['start_date', 'end_date'] });
+    }
+    if (start_date && end_date && new Date(end_date) < new Date(start_date)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'end_date must be on or after start_date.', { field: 'end_date' });
+    }
+
     if (!isValidJobPriority(priority)) {
       return sendError(res, 400, ERROR_CODES.INVALID_JOB_PRIORITY,
         'Invalid priority. Allowed: Low, Medium, High, Critical.', { field: 'priority' });
     }
     if (!isValidJobCategory(category)) {
       return sendError(res, 400, ERROR_CODES.INVALID_JOB_CATEGORY,
-        'Invalid category. Allowed: Service, AMC Visit, Breakdown, Installation & Commissioning, Inspection, Workshop.', { field: 'category' });
+        'Invalid category. Allowed: Service, AMC Visit, Breakdown, Installation & Commissioning, Inspection, Workshop, Office, Trial.', { field: 'category' });
     }
 
     const clientCheck = await dbClient.query('SELECT id, name FROM clients WHERE id = $1', [client_id]);
     if (clientCheck.rows.length === 0) return Errors.clientNotFound(res);
 
-    if (technician_id) {
-      const techCheck = await dbClient.query('SELECT id FROM technicians WHERE id = $1', [technician_id]);
-      if (techCheck.rows.length === 0) return Errors.technicianNotFound(res);
+    // Validate all technician IDs
+    for (const tid of techIds) {
+      const techCheck = await dbClient.query('SELECT id FROM technicians WHERE id = $1', [tid]);
+      if (techCheck.rows.length === 0) {
+        return sendError(res, 404, ERROR_CODES.TECHNICIAN_NOT_FOUND,
+          `Technician with ID ${tid} not found.`, { field: 'technician_ids' });
+      }
     }
 
-    // Validate amc_id if provided
     if (amc_id) {
-      const amcCheck = await dbClient.query(
-        'SELECT id FROM amc_contracts WHERE id = $1', [amc_id]
-      );
+      const amcCheck = await dbClient.query('SELECT id FROM amc_contracts WHERE id = $1', [amc_id]);
       if (amcCheck.rows.length === 0) {
         return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
           `AMC contract "${amc_id}" not found.`, { field: 'amc_id' });
@@ -222,24 +255,34 @@ const createJob = async (req, res) => {
 
     await dbClient.query('BEGIN');
 
-    const jobId  = await generateJobId(dbClient);
-    const status = technician_id ? 'Assigned' : 'Raised';
+    const jobId          = await generateJobId(dbClient);
+    const primaryTechId  = techIds[0] || null;
+    const status         = primaryTechId ? 'Assigned' : 'Raised';
 
     const result = await dbClient.query(
       `INSERT INTO jobs
          (id, title, description, client_id, technician_id, amc_id, status, priority,
-          category, amount, raised_date, scheduled_date, raised_by_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_DATE, $11, $12)
+          category, amount, raised_date, scheduled_date, start_date, end_date, raised_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_DATE, $11, $12, $13, $14)
        RETURNING *`,
       [
         jobId, title.trim(), description || null,
-        client_id, technician_id || null, amc_id || null,
+        client_id, primaryTechId, amc_id || null,
         status, priority, category,
         parseFloat(amount) || 0,
         scheduled_date || null,
+        start_date || null, end_date || null,
         req.user.id,
       ]
     );
+
+    // Insert all technicians into junction table
+    for (const tid of techIds) {
+      await dbClient.query(
+        `INSERT INTO job_technicians (job_id, technician_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [jobId, tid]
+      );
+    }
 
     await dbClient.query('COMMIT');
 
@@ -255,8 +298,8 @@ const createJob = async (req, res) => {
       entity_type: 'job', entity_id: jobId, performed_by: req.user.id,
     });
 
-    if (technician_id) {
-      notifyTechnicianJobAssignment(jobId, technician_id)
+    for (const tid of techIds) {
+      notifyTechnicianJobAssignment(jobId, tid)
         .catch(e => console.error('[WhatsApp] job assign notify', e.message));
     }
 
@@ -285,17 +328,21 @@ const getJobById = async (req, res) => {
     const result = await pool.query(
       `SELECT
          j.id, j.title, j.description,
-         j.client_id,     c.name  AS client_name,
-         j.technician_id, t.name  AS technician_name,
-         j.amc_id,        a.title AS amc_title,
+         j.client_id, c.name AS client_name,
+         j.amc_id,    a.title AS amc_title,
          a.status AS amc_status, a.po_number AS amc_po_number,
          j.status, j.priority, j.category, j.amount,
-         j.raised_date, j.scheduled_date, j.closed_date,
+         j.raised_date, j.scheduled_date, j.start_date, j.end_date, j.closed_date,
          j.raised_by_user_id,
+         (
+           SELECT COALESCE(json_agg(json_build_object('id', t2.id, 'name', t2.name, 'phone', t2.phone) ORDER BY jt.assigned_at), '[]'::json)
+           FROM job_technicians jt
+           JOIN technicians t2 ON t2.id = jt.technician_id
+           WHERE jt.job_id = j.id
+         ) AS technicians,
          j.created_at, j.updated_at
        FROM jobs j
        LEFT JOIN clients       c ON c.id = j.client_id
-       LEFT JOIN technicians   t ON t.id = j.technician_id
        LEFT JOIN amc_contracts a ON a.id = j.amc_id
        WHERE j.id = $1`,
       [id]
@@ -338,10 +385,20 @@ const updateJob = async (req, res) => {
     if (existCheck.rows.length === 0) return Errors.jobNotFound(res);
 
     const cur = existCheck.rows[0];
-    const { title, description, technician_id, priority, category, scheduled_date, amount, amc_id } = req.body;
+    const {
+      title, description, priority, category,
+      scheduled_date, start_date, end_date,
+      amount, amc_id, technician_ids,
+    } = req.body;
 
-    if (!title && description === undefined && technician_id === undefined &&
-        !priority && !category && scheduled_date === undefined && amount === undefined && amc_id === undefined) {
+    const hasTechIds = technician_ids !== undefined;
+    const techIds    = hasTechIds
+      ? (Array.isArray(technician_ids) ? technician_ids.map(Number).filter(Boolean) : technician_ids ? [Number(technician_ids)] : [])
+      : null;
+
+    if (!title && description === undefined && !priority && !category &&
+        scheduled_date === undefined && start_date === undefined && end_date === undefined &&
+        amount === undefined && amc_id === undefined && !hasTechIds) {
       return sendError(res, 400, ERROR_CODES.NO_FIELDS_TO_UPDATE, 'No fields provided to update.');
     }
 
@@ -351,12 +408,23 @@ const updateJob = async (req, res) => {
     }
     if (category && !isValidJobCategory(category)) {
       return sendError(res, 400, ERROR_CODES.INVALID_JOB_CATEGORY,
-        'Invalid category. Allowed: Service, AMC Visit, Breakdown, Installation & Commissioning, Inspection, Workshop.', { field: 'category' });
+        'Invalid category.', { field: 'category' });
     }
 
-    if (technician_id) {
-      const techCheck = await pool.query('SELECT id FROM technicians WHERE id = $1', [technician_id]);
-      if (techCheck.rows.length === 0) return Errors.technicianNotFound(res);
+    // Date mode validation
+    if (scheduled_date !== undefined && (start_date !== undefined || end_date !== undefined)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'Use either scheduled_date OR start_date + end_date, not both.');
+    }
+
+    if (hasTechIds && techIds) {
+      for (const tid of techIds) {
+        const techCheck = await pool.query('SELECT id FROM technicians WHERE id = $1', [tid]);
+        if (techCheck.rows.length === 0) {
+          return sendError(res, 404, ERROR_CODES.TECHNICIAN_NOT_FOUND,
+            `Technician with ID ${tid} not found.`, { field: 'technician_ids' });
+        }
+      }
     }
 
     if (amc_id) {
@@ -367,36 +435,66 @@ const updateJob = async (req, res) => {
       }
     }
 
-    const newTitle         = title          ? title.trim()       : cur.title;
-    const newDescription   = description    !== undefined        ? description    : cur.description;
-    const newTechnicianId  = technician_id  !== undefined        ? technician_id  : cur.technician_id;
+    const newTitle         = title          ? title.trim()              : cur.title;
+    const newDescription   = description    !== undefined               ? description          : cur.description;
     const newPriority      = priority       || cur.priority;
     const newCategory      = category       || cur.category;
-    const newScheduledDate = scheduled_date !== undefined        ? scheduled_date : cur.scheduled_date;
-    const newAmount        = amount         !== undefined        ? parseFloat(amount) : cur.amount;
-    const newAmcId         = amc_id         !== undefined        ? (amc_id || null)   : cur.amc_id;
+    const newScheduledDate = scheduled_date !== undefined               ? (scheduled_date || null) : cur.scheduled_date;
+    const newStartDate     = start_date     !== undefined               ? (start_date     || null) : cur.start_date;
+    const newEndDate       = end_date       !== undefined               ? (end_date       || null) : cur.end_date;
+    const newAmount        = amount         !== undefined               ? parseFloat(amount)       : cur.amount;
+    const newAmcId         = amc_id         !== undefined               ? (amc_id || null)         : cur.amc_id;
+    const primaryTechId    = hasTechIds     ? (techIds[0] || null)      : cur.technician_id;
 
     let newStatus = cur.status;
-    if (newTechnicianId && !cur.technician_id && cur.status === 'Raised') {
+    if (primaryTechId && !cur.technician_id && cur.status === 'Raised') {
       newStatus = 'Assigned';
     }
 
-    const result = await pool.query(
-      `UPDATE jobs
-       SET title=$1, description=$2, technician_id=$3, priority=$4,
-           category=$5, scheduled_date=$6, amount=$7, status=$8, amc_id=$9
-       WHERE id=$10
-       RETURNING *`,
-      [newTitle, newDescription, newTechnicianId, newPriority,
-       newCategory, newScheduledDate, newAmount, newStatus, newAmcId, id]
-    );
+    const dbClient = await pool.connect();
+    try {
+      await dbClient.query('BEGIN');
 
-    if (newTechnicianId && newTechnicianId !== cur.technician_id) {
-      notifyTechnicianJobAssignment(id, newTechnicianId)
-        .catch(e => console.error('[WhatsApp] job assign notify', e.message));
+      const result = await dbClient.query(
+        `UPDATE jobs
+         SET title=$1, description=$2, technician_id=$3, priority=$4, category=$5,
+             scheduled_date=$6, start_date=$7, end_date=$8, amount=$9, status=$10, amc_id=$11
+         WHERE id=$12
+         RETURNING *`,
+        [newTitle, newDescription, primaryTechId, newPriority, newCategory,
+         newScheduledDate, newStartDate, newEndDate, newAmount, newStatus, newAmcId, id]
+      );
+
+      // Replace technician assignments only if technician_ids was explicitly passed
+      if (hasTechIds && techIds !== null) {
+        await dbClient.query('DELETE FROM job_technicians WHERE job_id = $1', [id]);
+        for (const tid of techIds) {
+          await dbClient.query(
+            `INSERT INTO job_technicians (job_id, technician_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [id, tid]
+          );
+        }
+      }
+
+      await dbClient.query('COMMIT');
+
+      // Notify newly added technicians
+      if (hasTechIds && techIds) {
+        for (const tid of techIds) {
+          if (tid !== cur.technician_id) {
+            notifyTechnicianJobAssignment(id, tid)
+              .catch(e => console.error('[WhatsApp] job assign notify', e.message));
+          }
+        }
+      }
+
+      return res.status(200).json({ success: true, message: 'Job updated successfully.', data: result.rows[0] });
+    } catch (err) {
+      await dbClient.query('ROLLBACK');
+      throw err;
+    } finally {
+      dbClient.release();
     }
-
-    return res.status(200).json({ success: true, message: 'Job updated successfully.', data: result.rows[0] });
 
   } catch (error) {
     console.error('Update job error:', error);
