@@ -1237,9 +1237,9 @@ const updateReport = async (req, res) => {
 
     const cur = existCheck.rows[0];
 
-    if (cur.status !== 'Pending') {
+    if (!['Pending', 'Rejected'].includes(cur.status)) {
       return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
-        `Report cannot be edited after it has been ${cur.status.toLowerCase()}.`);
+        'Only Pending or Rejected reports can be edited.');
     }
 
     // Technician can only edit their own report
@@ -1260,6 +1260,9 @@ const updateReport = async (req, res) => {
 
     await dbClient.query('BEGIN');
 
+    // If report was Rejected, reset to Pending so admin can re-review
+    const newStatus = cur.status === 'Rejected' ? 'Pending' : cur.status;
+
     await dbClient.query(
       `UPDATE reports SET
          title                        = COALESCE($1,  title),
@@ -1279,8 +1282,11 @@ const updateReport = async (req, res) => {
          report_date                  = COALESCE($15, report_date),
          client_name                  = COALESCE($16, client_name),
          client_email                 = COALESCE($17, client_email),
+         status                       = $18,
+         approved_by_user_id          = CASE WHEN $18 = 'Pending' THEN NULL ELSE approved_by_user_id END,
+         approved_at                  = CASE WHEN $18 = 'Pending' THEN NULL ELSE approved_at END,
          updated_at                   = NOW()
-       WHERE id = $18`,
+       WHERE id = $19`,
       [
         title        ? title.trim() : null,
         findings     || null, recommendations || null,
@@ -1295,6 +1301,7 @@ const updateReport = async (req, res) => {
         report_date  || null,
         client_name  || null,
         client_email || null,
+        newStatus,
         id,
       ]
     );
@@ -1349,7 +1356,10 @@ const updateReport = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Report ${id} updated successfully.`,
+      message: cur.status === 'Rejected'
+        ? `Report ${id} updated and moved back to Pending for re-review.`
+        : `Report ${id} updated successfully.`,
+      status: newStatus,
     });
 
   } catch (error) {
@@ -1362,17 +1372,44 @@ const updateReport = async (req, res) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// DELETE /api/reports/:id — admin only
-// Permanently deletes a report and all child rows (cascade).
+// DELETE /api/reports/:id
+// Admin: can delete Pending or Rejected reports.
+// Technician: can only delete their own Pending report.
+// Approved reports cannot be deleted by anyone.
 // ────────────────────────────────────────────────────────────
 const deleteReport = async (req, res) => {
   try {
     const { id } = req.params;
 
     const existCheck = await pool.query(
-      'SELECT id, title, status FROM reports WHERE id = $1', [id]
+      `SELECT r.id, r.title, r.status, t.user_id AS technician_user_id
+       FROM reports r
+       LEFT JOIN technicians t ON t.id = r.technician_id
+       WHERE r.id = $1`,
+      [id]
     );
     if (existCheck.rows.length === 0) return Errors.reportNotFound(res);
+
+    const report  = existCheck.rows[0];
+    const isAdmin = ['admin', 'manager'].includes(req.user.role);
+
+    // Approved reports cannot be deleted by anyone
+    if (report.status === 'Approved') {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'Approved reports cannot be deleted.');
+    }
+
+    // Technician: only their own Pending report
+    if (!isAdmin) {
+      if (report.technician_user_id !== req.user.id) {
+        return sendError(res, 403, ERROR_CODES.FORBIDDEN,
+          'You can only delete your own reports.');
+      }
+      if (report.status !== 'Pending') {
+        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+          'Technicians can only delete reports that are still Pending.');
+      }
+    }
 
     await pool.query('DELETE FROM reports WHERE id = $1', [id]);
 

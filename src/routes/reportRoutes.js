@@ -779,11 +779,15 @@ router.post('/:id/documents', protect, addReportDocumentLink);
  *   put:
  *     summary: Edit a report (Pending status only)
  *     description: |
- *       Updates report fields. Only allowed while status is **Pending** —
- *       once Approved or Rejected the report is locked.
+ *       Updates report fields. Only allowed while status is **Pending** or **Rejected**.
+ *       Approved reports are permanently locked.
  *
- *       - **Admin / Manager**: can edit any Pending report.
- *       - **Technician**: can only edit their own report.
+ *       - **Admin / Manager**: can edit any Pending or Rejected report.
+ *       - **Technician**: can only edit their own Pending or Rejected report.
+ *
+ *       If a **Rejected** report is edited, its status is automatically reset to
+ *       **Pending** so admin can re-review it. The `approved_by` and `approved_at`
+ *       fields are also cleared.
  *
  *       If `checklist_items`, `issue_observations`, or `mandatory_spares` arrays
  *       are provided they fully replace the existing entries. Omit them to leave
@@ -871,9 +875,12 @@ router.put('/:id', protect, updateReport);
  *   delete:
  *     summary: Permanently delete a report (admin only)
  *     description: |
- *       Deletes the report and all child records (checklist items, issue observations,
- *       mandatory spares, images, document links, technical reports).
- *       This action cannot be undone.
+ *       Permanently deletes a report and all child records.
+ *
+ *       **Rules:**
+ *       - **Approved** reports cannot be deleted by anyone.
+ *       - **Admin / Manager**: can delete Pending or Rejected reports.
+ *       - **Technician**: can only delete their own **Pending** report (not Rejected).
  *     tags: [Reports]
  *     security:
  *       - bearerAuth: []
@@ -886,9 +893,13 @@ router.put('/:id', protect, updateReport);
  *     responses:
  *       200:
  *         description: Report deleted successfully
+ *       400:
+ *         description: Report is Approved or technician trying to delete a Rejected report
+ *       403:
+ *         description: Not your report
  *       404:
  *         description: Report not found
  */
-router.delete('/:id', protect, authorize('admin'), deleteReport);
+router.delete('/:id', protect, deleteReport);
 
 module.exports = router;
