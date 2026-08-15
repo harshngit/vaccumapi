@@ -72,10 +72,20 @@ const sendWhatsAppTemplateMessage = async ({ to, templateName, languageCode = 'e
 // ─── Technician: notify on job assignment ─────────────────────
 // Looks up the technician's phone + job/client details itself,
 // so callers only need to pass the job and technician IDs.
+// Format date display: range if start+end present, single date otherwise
+const formatJobDate = (row) => {
+  if (row.start_date && row.end_date) {
+    return `${formatDateShort(row.start_date)} – ${formatDateShort(row.end_date)}`;
+  }
+  return row.scheduled_date ? formatDateShort(row.scheduled_date) : 'N/A';
+};
+
 const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
   try {
+    // Fetch job + the specific technician's phone
     const result = await pool.query(
-      `SELECT j.id, j.title, j.scheduled_date, t.name AS technician_name, t.phone AS technician_phone,
+      `SELECT j.id, j.title, j.scheduled_date, j.start_date, j.end_date,
+              t.name AS technician_name, t.phone AS technician_phone,
               c.name AS client_name
        FROM jobs j
        JOIN technicians t ON t.id = $2
@@ -91,9 +101,18 @@ const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
     const row = result.rows[0];
     const to  = formatWhatsAppNumber(row.technician_phone);
     if (!to) {
-      console.warn(`[WhatsApp] Skipped job_assigned for ${jobId} — technician "${row.technician_name}" has no phone number on file.`);
+      console.warn(`[WhatsApp] Skipped job_assigned for ${jobId} — technician "${row.technician_name}" has no phone number.`);
       return;
     }
+
+    // Fetch all technician names assigned to this job
+    const allTechs = await pool.query(
+      `SELECT t.name FROM job_technicians jt
+       JOIN technicians t ON t.id = jt.technician_id
+       WHERE jt.job_id = $1 ORDER BY jt.assigned_at`,
+      [jobId]
+    );
+    const allTechNames = allTechs.rows.map(r => r.name).join(', ') || row.technician_name;
 
     await sendWhatsAppTemplateMessage({
       to,
@@ -105,7 +124,8 @@ const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
           { type: 'text', text: row.id },
           { type: 'text', text: row.title },
           { type: 'text', text: row.client_name || 'N/A' },
-          { type: 'text', text: formatDateShort(row.scheduled_date) },
+          { type: 'text', text: formatJobDate(row) },
+          { type: 'text', text: allTechNames },
         ],
       }],
     });
@@ -121,7 +141,7 @@ const notifyJobCancellation = async (jobId, cancelReason = '') => {
   try {
     const result = await pool.query(
       `SELECT j.id, j.title, j.scheduled_date, j.start_date, j.end_date,
-              c.name AS client_name, c.phone AS client_phone
+              c.name AS client_name
        FROM jobs j
        LEFT JOIN clients c ON c.id = j.client_id
        WHERE j.id = $1`,
@@ -129,32 +149,50 @@ const notifyJobCancellation = async (jobId, cancelReason = '') => {
     );
 
     if (!result.rows.length) return;
-    const row = result.rows[0];
+    const job = result.rows[0];
 
-    const to = formatWhatsAppNumber(row.client_phone);
-    if (!to) {
-      console.warn(`[WhatsApp] Skipped job_cancelled for ${jobId} — client "${row.client_name}" has no phone number.`);
+    // Fetch all technicians assigned to this job
+    const techResult = await pool.query(
+      `SELECT t.name, t.phone FROM job_technicians jt
+       JOIN technicians t ON t.id = jt.technician_id
+       WHERE jt.job_id = $1 ORDER BY jt.assigned_at`,
+      [jobId]
+    );
+
+    if (!techResult.rows.length) {
+      console.warn(`[WhatsApp] Skipped job_cancelled for ${jobId} — no technicians assigned.`);
       return;
     }
 
-    const visitDate = row.scheduled_date || row.start_date || null;
+    const visitDate  = formatJobDate(job);
+    const clientName = job.client_name || 'N/A';
 
-    await sendWhatsAppTemplateMessage({
-      to,
-      templateName: 'job_cancelled',
-      components: [{
-        type: 'body',
-        parameters: [
-          { type: 'text', text: row.client_name || 'Customer' },
-          { type: 'text', text: row.id },
-          { type: 'text', text: row.title },
-          { type: 'text', text: visitDate ? formatDateShort(visitDate) : 'N/A' },
-          { type: 'text', text: cancelReason || 'N/A' },
-        ],
-      }],
-    });
+    // Send cancellation message to each assigned technician
+    for (const tech of techResult.rows) {
+      const to = formatWhatsAppNumber(tech.phone);
+      if (!to) {
+        console.warn(`[WhatsApp] Skipped job_cancelled for ${jobId} — technician "${tech.name}" has no phone number.`);
+        continue;
+      }
 
-    console.log(`[WhatsApp] Cancellation notification sent to ${row.client_name} (${to}) for job ${jobId}`);
+      await sendWhatsAppTemplateMessage({
+        to,
+        templateName: 'job_cancelled',
+        components: [{
+          type: 'body',
+          parameters: [
+            { type: 'text', text: tech.name },
+            { type: 'text', text: job.id },
+            { type: 'text', text: job.title },
+            { type: 'text', text: clientName },
+            { type: 'text', text: visitDate },
+            { type: 'text', text: cancelReason || 'N/A' },
+          ],
+        }],
+      });
+
+      console.log(`[WhatsApp] Cancellation notification sent to technician ${tech.name} (${to}) for job ${jobId}`);
+    }
   } catch (err) {
     console.error('[WhatsApp] notifyJobCancellation error:', err.message);
   }
