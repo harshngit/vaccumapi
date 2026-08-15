@@ -15,7 +15,7 @@ const {
 const { notify } = require('./notificationController');
 const wsManager  = require('../config/websocketManager');
 const { logActivity } = require('./activityController');
-const { notifyTechnicianJobAssignment } = require('./whatsappController');
+const { notifyTechnicianJobAssignment, notifyJobCancellation } = require('./whatsappController');
 
 // ─── Helper: generate next job ID ────────────────────────────
 const generateJobId = async (client) => {
@@ -514,22 +514,36 @@ const updateJobStatus = async (req, res) => {
     if (!status) return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS, 'status is required.', { field: 'status' });
     if (!isValidJobStatus(status)) {
       return sendError(res, 400, ERROR_CODES.INVALID_JOB_STATUS,
-        'Invalid status. Allowed: Raised, Assigned, In Progress, Closed.', { field: 'status' });
+        'Invalid status. Allowed: Raised, Assigned, In Progress, Closed, Cancelled.', { field: 'status' });
     }
 
     const existCheck = await pool.query('SELECT * FROM jobs WHERE id = $1', [id]);
     if (existCheck.rows.length === 0) return Errors.jobNotFound(res);
     const job = existCheck.rows[0];
 
+    // Technicians cannot cancel jobs
     if (req.user.role === 'technician') {
+      if (status === 'Cancelled') return Errors.forbidden(res);
       const techRow = await pool.query('SELECT id FROM technicians WHERE user_id = $1', [req.user.id]);
       if (!techRow.rows.length || techRow.rows[0].id !== job.technician_id) return Errors.forbidden(res);
     }
 
-    if (!isValidStatusTransition(job.status, status)) {
-      return sendError(res, 400, ERROR_CODES.INVALID_STATUS_TRANSITION,
-        `Invalid transition. Job is "${job.status}". Next allowed: "${JOB_STATUS_TRANSITIONS[job.status] || 'none (already Closed)'}"`,
-        { current_status: job.status, allowed_next: JOB_STATUS_TRANSITIONS[job.status] || null });
+    // Cancellation — admin/manager only, from any non-terminal status
+    if (status === 'Cancelled') {
+      if (!['admin', 'manager'].includes(req.user.role)) {
+        return sendError(res, 403, ERROR_CODES.FORBIDDEN, 'Only admin or manager can cancel a job.');
+      }
+      if (!['Raised', 'Assigned'].includes(job.status)) {
+        return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+          `Cannot cancel a job that is "${job.status}". Cancellation is only allowed when status is Raised or Assigned.`);
+      }
+    } else {
+      // Normal transition validation for all other statuses
+      if (!isValidStatusTransition(job.status, status)) {
+        return sendError(res, 400, ERROR_CODES.INVALID_STATUS_TRANSITION,
+          `Invalid transition. Job is "${job.status}". Next allowed: "${JOB_STATUS_TRANSITIONS[job.status] || 'none (already Closed)'}"`,
+          { current_status: job.status, allowed_next: JOB_STATUS_TRANSITIONS[job.status] || null });
+      }
     }
 
     if (status === 'Closed' && !job.technician_id) {
@@ -537,14 +551,20 @@ const updateJobStatus = async (req, res) => {
         'Cannot close a job that has no assigned technician.');
     }
 
+    const { cancel_reason } = req.body;
+
     await dbClient.query('BEGIN');
 
     const result = await dbClient.query(
       `UPDATE jobs
-       SET status = $1, closed_date = ${status === 'Closed' ? 'CURRENT_DATE' : 'NULL'}
+       SET status       = $1,
+           closed_date  = ${status === 'Closed'    ? 'CURRENT_DATE' : 'NULL'},
+           cancelled_at = ${status === 'Cancelled' ? 'NOW()'        : 'NULL'},
+           cancelled_by = ${status === 'Cancelled' ? req.user.id    : 'NULL'},
+           cancel_reason = $3
        WHERE id = $2
-       RETURNING id, status, closed_date, updated_at`,
-      [status, id]
+       RETURNING id, status, closed_date, cancelled_at, cancel_reason, updated_at`,
+      [status, id, status === 'Cancelled' ? (cancel_reason || null) : null]
     );
 
     if (status === 'Closed' && job.technician_id) {
@@ -556,7 +576,12 @@ const updateJobStatus = async (req, res) => {
 
     await dbClient.query('COMMIT');
 
-    const statusTitle = status === 'Closed' ? 'Job Closed' : status === 'In Progress' ? 'Job In Progress' : status === 'Assigned' ? 'Job Assigned' : 'Job Status Updated';
+    const statusTitle = status === 'Closed'    ? 'Job Closed'
+                      : status === 'Cancelled'  ? 'Visit Cancelled'
+                      : status === 'In Progress' ? 'Job In Progress'
+                      : status === 'Assigned'    ? 'Job Assigned'
+                      : 'Job Status Updated';
+
     await notify({
       event: 'job_status', title: statusTitle,
       message: `${id} moved to "${status}"`,
@@ -574,8 +599,15 @@ const updateJobStatus = async (req, res) => {
       }
     }
 
+    // WhatsApp notification to client on cancellation
+    if (status === 'Cancelled') {
+      notifyJobCancellation(id, cancel_reason)
+        .catch(e => console.error('[WhatsApp] cancellation notify error:', e.message));
+    }
+
     await logActivity({
-      type: 'job', action: `Job ${id} status changed to "${status}"`,
+      type: 'job',
+      action: `Job ${id} status changed to "${status}"${cancel_reason ? ` — Reason: ${cancel_reason}` : ''}`,
       entity_type: 'job', entity_id: id, performed_by: req.user.id,
     });
 

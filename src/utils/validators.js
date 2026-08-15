@@ -45,7 +45,7 @@ const isValidClientStatus = (status) => {
 };
 
 const isValidJobStatus = (status) => {
-  return ['Raised', 'Assigned', 'In Progress', 'Closed'].includes(status);
+  return ['Raised', 'Assigned', 'In Progress', 'Closed', 'Cancelled'].includes(status);
 };
 
 const isValidJobPriority = (priority) => {
@@ -53,7 +53,11 @@ const isValidJobPriority = (priority) => {
 };
 
 const isValidJobCategory = (category) => {
-  return ['Service', 'AMC Visit', 'Breakdown', 'Installation & Commissioning', 'Inspection', 'Workshop', 'Office', 'Trial'].includes(category);
+  return [
+    'Service', 'AMC Visit', 'Breakdown', 'Installation & Commissioning',
+    'Inspection', 'Workshop', 'Office', 'Trial',
+    'Office Visit', 'Vendor Visit', 'Trial Pump Installation',
+  ].includes(category);
 };
 
 const isValidReportStatus = (status) => {

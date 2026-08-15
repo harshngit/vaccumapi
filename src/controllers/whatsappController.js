@@ -115,6 +115,52 @@ const notifyTechnicianJobAssignment = async (jobId, technicianId) => {
 };
 
 // ────────────────────────────────────────────────────────────
+// Notify client on job cancellation via WhatsApp
+// ────────────────────────────────────────────────────────────
+const notifyJobCancellation = async (jobId, cancelReason = '') => {
+  try {
+    const result = await pool.query(
+      `SELECT j.id, j.title, j.scheduled_date, j.start_date, j.end_date,
+              c.name AS client_name, c.phone AS client_phone
+       FROM jobs j
+       LEFT JOIN clients c ON c.id = j.client_id
+       WHERE j.id = $1`,
+      [jobId]
+    );
+
+    if (!result.rows.length) return;
+    const row = result.rows[0];
+
+    const to = formatWhatsAppNumber(row.client_phone);
+    if (!to) {
+      console.warn(`[WhatsApp] Skipped job_cancelled for ${jobId} — client "${row.client_name}" has no phone number.`);
+      return;
+    }
+
+    const visitDate = row.scheduled_date || row.start_date || null;
+
+    await sendWhatsAppTemplateMessage({
+      to,
+      templateName: 'job_cancelled',
+      components: [{
+        type: 'body',
+        parameters: [
+          { type: 'text', text: row.client_name || 'Customer' },
+          { type: 'text', text: row.id },
+          { type: 'text', text: row.title },
+          { type: 'text', text: visitDate ? formatDateShort(visitDate) : 'N/A' },
+          { type: 'text', text: cancelReason || 'N/A' },
+        ],
+      }],
+    });
+
+    console.log(`[WhatsApp] Cancellation notification sent to ${row.client_name} (${to}) for job ${jobId}`);
+  } catch (err) {
+    console.error('[WhatsApp] notifyJobCancellation error:', err.message);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
 // GET /api/whatsapp/webhook — verification handshake
 // Meta calls this once when you save the webhook config in
 // the developer dashboard, to confirm you own the endpoint.
@@ -154,6 +200,7 @@ module.exports = {
   handleWebhookEvent,
   sendWhatsAppTemplateMessage,
   notifyTechnicianJobAssignment,
+  notifyJobCancellation,
   formatWhatsAppNumber,
   formatDateShort,
 };
