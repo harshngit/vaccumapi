@@ -1,6 +1,6 @@
 const express = require('express');
 const router  = express.Router();
-const { getUsers, updateUser, deleteUser, adminChangePassword } = require('../controllers/userController');
+const { getUsers, updateUser, deleteUser, adminChangePassword, permanentDeleteUser, reactivateUser } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 /**
@@ -270,5 +270,78 @@ router.delete('/:id', protect, authorize('admin'), deleteUser);
  *       404: { description: User not found }
  */
 router.put('/:id/password', protect, authorize('admin'), adminChangePassword);
+
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/users/{id}/permanent:
+ *   delete:
+ *     summary: Permanently delete a user (admin only)
+ *     description: |
+ *       Admin only. **Irreversible.** Removes the user record from the database entirely.
+ *       Works on both active and inactive users.
+ *       You cannot permanently delete your own account.
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 5 }
+ *         description: ID of the user to permanently delete
+ *     responses:
+ *       200:
+ *         description: User permanently deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'User "Abhishek Jaiswar" has been permanently deleted.' }
+ *                 deleted:
+ *                   type: object
+ *                   properties:
+ *                     id:    { type: integer, example: 5 }
+ *                     email: { type: string,  example: "abhishek@example.com" }
+ *                     role:  { type: string,  example: "technician" }
+ *       400: { description: Cannot delete own account }
+ *       403: { description: Admin only }
+ *       404: { description: User not found }
+ */
+router.delete('/:id/permanent', protect, authorize('admin'), permanentDeleteUser);
+
+/**
+ * @swagger
+ * /api/users/{id}/reactivate:
+ *   put:
+ *     summary: Reactivate a deactivated user (admin only)
+ *     description: Sets `is_active = true` for a previously deactivated user.
+ *     tags: [User Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 5 }
+ *     responses:
+ *       200:
+ *         description: User reactivated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'User "Abhishek Jaiswar" has been reactivated successfully.' }
+ *                 data:   { $ref: '#/components/schemas/UserResponse' }
+ *       400: { description: User is already active }
+ *       403: { description: Admin only }
+ *       404: { description: User not found }
+ */
+router.put('/:id/reactivate', protect, authorize('admin'), reactivateUser);
 
 module.exports = router;

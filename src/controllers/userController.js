@@ -296,4 +296,106 @@ const adminChangePassword = async (req, res) => {
   }
 };
 
-module.exports = { getUsers, updateUser, deleteUser, adminChangePassword };
+// ────────────────────────────────────────────────────────────
+// PUT /api/users/:id/reactivate  (admin only)
+// Re-activates a previously deactivated user.
+// ────────────────────────────────────────────────────────────
+const reactivateUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    if (isNaN(userId)) {
+      return sendError(res, 400, ERROR_CODES.INVALID_USER_ID,
+        'Invalid user ID.', { field: 'id' });
+    }
+
+    const existCheck = await pool.query(
+      'SELECT id, first_name, last_name, email, role, is_active FROM users WHERE id = $1', [userId]);
+    if (existCheck.rows.length === 0) return Errors.userNotFound(res);
+
+    const user = existCheck.rows[0];
+
+    if (user.is_active) {
+      return sendError(res, 400, 'USER_ALREADY_ACTIVE',
+        'This user is already active.');
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET is_active = TRUE, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, email, first_name, last_name, phone_number, role, is_active, created_at, updated_at`,
+      [userId]
+    );
+
+    await logActivity({
+      type:         'user',
+      action:       `User "${user.first_name} ${user.last_name}" reactivated`,
+      entity_type:  'user',
+      entity_id:    String(userId),
+      performed_by: req.user.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `User "${user.first_name} ${user.last_name}" has been reactivated successfully.`,
+      data:    result.rows[0],
+    });
+
+  } catch (error) {
+    console.error('reactivateUser error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+// ────────────────────────────────────────────────────────────
+// DELETE /api/users/:id/permanent  (admin only — hard delete)
+// Permanently removes a user from the database.
+// Works on both active and inactive users.
+// ────────────────────────────────────────────────────────────
+const permanentDeleteUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    if (isNaN(userId)) {
+      return sendError(res, 400, ERROR_CODES.INVALID_USER_ID,
+        'Invalid user ID.', { field: 'id' });
+    }
+
+    if (req.user.id === userId) {
+      return sendError(res, 400, ERROR_CODES.CANNOT_DELETE_SELF,
+        'You cannot permanently delete your own account.');
+    }
+
+    const existCheck = await pool.query(
+      'SELECT id, first_name, last_name, email, role FROM users WHERE id = $1', [userId]);
+    if (existCheck.rows.length === 0) return Errors.userNotFound(res);
+
+    const user = existCheck.rows[0];
+
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    await logActivity({
+      type:         'user',
+      action:       `User "${user.first_name} ${user.last_name}" (${user.email}) permanently deleted`,
+      entity_type:  'user',
+      entity_id:    String(userId),
+      performed_by: req.user.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `User "${user.first_name} ${user.last_name}" has been permanently deleted.`,
+      deleted: {
+        id:    user.id,
+        email: user.email,
+        role:  user.role,
+      },
+    });
+
+  } catch (error) {
+    console.error('permanentDeleteUser error:', error);
+    return Errors.internalError(res);
+  }
+};
+
+module.exports = { getUsers, updateUser, deleteUser, adminChangePassword, permanentDeleteUser, reactivateUser };
