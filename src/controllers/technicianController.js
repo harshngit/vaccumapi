@@ -4,6 +4,7 @@
 
 const pool    = require('../config/db');
 const bcrypt  = require('bcryptjs');
+const crypto  = require('crypto');
 const jwt     = require('jsonwebtoken');
 const { sendError, Errors } = require('../utils/AppError');
 const { logActivity } = require('./activityController');
@@ -192,9 +193,10 @@ const createTechnician = async (req, res) => {
             'A technician profile already exists for this email/phone.');
         }
         linkedUserId = existingUser.id;
-      } else if (password) {
-        // Create a new user account for login
-        if (password.length < 6) {
+      } else {
+        // Always create a user account so the technician appears in the user list
+        // and can log in. Use provided password or generate a random temp one.
+        if (password && password.length < 6) {
           await client.query('ROLLBACK');
           return sendError(res, 400, ERROR_CODES.PASSWORD_TOO_SHORT,
             'Password must be at least 6 characters long.', { field: 'password' });
@@ -220,10 +222,12 @@ const createTechnician = async (req, res) => {
           }
         }
 
-        const nameParts    = name.trim().split(/\s+/);
-        const firstName    = nameParts[0];
-        const lastName     = nameParts.slice(1).join(' ') || '-';
-        const hashedPass   = await bcrypt.hash(password, 12);
+        const nameParts  = name.trim().split(/\s+/);
+        const firstName  = nameParts[0];
+        const lastName   = nameParts.slice(1).join(' ') || '-';
+        // If no password given, generate a random temp password — admin must set it later
+        const rawPass    = password || crypto.randomBytes(8).toString('hex');
+        const hashedPass = await bcrypt.hash(rawPass, 12);
 
         const userResult = await client.query(
           `INSERT INTO users (first_name, last_name, email, phone_number, password, role)
@@ -346,6 +350,7 @@ const createTechnician = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: `Technician ${name} added successfully.`,
+      requires_password_setup: !password,
       data: responseData,
     });
 
@@ -612,6 +617,66 @@ const technicianLogin = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// PUT /api/technicians/:id/password  (admin only)
+// Set or reset the password for a technician's login account.
+// Works whether or not a password was provided at creation time.
+// ────────────────────────────────────────────────────────────
+const setTechnicianPassword = async (req, res) => {
+  try {
+    const techId = parseInt(req.params.id);
+    if (isNaN(techId)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'Invalid technician ID.', { field: 'id' });
+    }
+
+    const { new_password } = req.body;
+    if (!new_password) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        '"new_password" is required.', { field: 'new_password' });
+    }
+    if (new_password.length < 6) {
+      return sendError(res, 400, ERROR_CODES.PASSWORD_TOO_SHORT,
+        'Password must be at least 6 characters long.',
+        { field: 'new_password', min_length: 6 });
+    }
+
+    const techCheck = await pool.query(
+      'SELECT id, user_id, name FROM technicians WHERE id = $1', [techId]);
+    if (techCheck.rows.length === 0) return Errors.technicianNotFound(res);
+
+    const tech = techCheck.rows[0];
+
+    if (!tech.user_id) {
+      return sendError(res, 400, 'NO_USER_ACCOUNT',
+        'This technician has no linked user account. Create one first by re-saving the technician with an email.');
+    }
+
+    const hashed = await bcrypt.hash(new_password, 12);
+    await pool.query(
+      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+      [hashed, tech.user_id]
+    );
+
+    await logActivity({
+      type:         'technician',
+      action:       `Password set for technician "${tech.name}"`,
+      entity_type:  'technician',
+      entity_id:    String(techId),
+      performed_by: req.user.id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Password updated successfully for technician "${tech.name}".`,
+    });
+
+  } catch (error) {
+    console.error('setTechnicianPassword error:', error);
+    return Errors.internalError(res);
+  }
+};
+
 module.exports = {
   getTechnicians,
   createTechnician,
@@ -619,4 +684,5 @@ module.exports = {
   updateTechnician,
   deleteTechnician,
   technicianLogin,
+  setTechnicianPassword,
 };

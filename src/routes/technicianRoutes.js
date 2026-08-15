@@ -11,6 +11,7 @@ const {
   updateTechnician,
   deleteTechnician,
   technicianLogin,
+  setTechnicianPassword,
 } = require('../controllers/technicianController');
 const {
   addTechnicianDocument,
@@ -748,5 +749,53 @@ router.put('/:id/ratings/:ratingId', protect, updateRating);
  *         description: Rating not found
  */
 router.delete('/:id/ratings/:ratingId', protect, authorize('admin', 'manager'), deleteRating);
+
+/**
+ * @swagger
+ * /api/technicians/{id}/password:
+ *   put:
+ *     summary: Set or reset a technician's login password (admin only)
+ *     description: |
+ *       Sets the password for the technician's linked user account.
+ *       Use this when a technician was created without a password, or to reset it.
+ *       No old password required.
+ *     tags: [Technicians]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 3 }
+ *         description: Technician ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [new_password]
+ *             properties:
+ *               new_password:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: "Tech@1234"
+ *           example:
+ *             new_password: "Tech@1234"
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'Password updated successfully for technician "Abhishek Jaiswar".' }
+ *       400: { description: Missing password, too short, or technician has no user account }
+ *       403: { description: Admin only }
+ *       404: { description: Technician not found }
+ */
+router.put('/:id/password', protect, authorize('admin'), setTechnicianPassword);
 
 module.exports = router;

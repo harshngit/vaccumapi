@@ -3,7 +3,7 @@ const jwt       = require('jsonwebtoken');
 const pool      = require('../config/db');
 const { sendError, Errors } = require('../utils/AppError');
 const ERROR_CODES = require('../utils/errorCodes');
-const { isValidEmail, isValidPhone, normalizePhone, isValidRole } = require('../utils/validators');
+const { isValidEmail, isValidPhone, normalizePhone, isValidRole, computeAvatar } = require('../utils/validators');
 const { logActivity } = require('./activityController');
 
 const generateToken = (userId) =>
@@ -82,6 +82,17 @@ const register = async (req, res) => {
 
     const user  = result.rows[0];
     const token = generateToken(user.id);
+
+    // If registered as technician, auto-create a technician profile
+    if (role === 'technician') {
+      const avatar = computeAvatar(`${first_name} ${last_name}`);
+      await pool.query(
+        `INSERT INTO technicians (id, user_id, name, email, phone, specialization, status, avatar)
+         VALUES ($1, $2, $3, $4, $5, 'General', 'Active', $6)
+         ON CONFLICT (id) DO NOTHING`,
+        [user.id, user.id, `${first_name.trim()} ${last_name.trim()}`, email.toLowerCase(), phone_number, avatar]
+      );
+    }
 
     await logActivity({
       type:         'user',
