@@ -77,7 +77,7 @@ const buildVisitQuery = async ({ year, month, day, technician_id, status, catego
        j.status,
        CASE WHEN r.id IS NOT NULL THEN 'Received' ELSE 'Not Received' END AS service_report_status,
        CASE WHEN j.status NOT IN ('Closed', 'Cancelled') THEN 'Yes' ELSE 'No' END AS pending_visit,
-       COALESCE(a.status, 'N/A')                                      AS amc_po_status,
+       COALESCE(a.status::text, 'N/A')                                AS amc_po_status,
        a.service_date_1,
        a.service_date_2,
        a.service_date_3,
