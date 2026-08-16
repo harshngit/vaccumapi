@@ -18,19 +18,31 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 
 // ─── Allowed MIME types ───────────────────────────────────────
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const IMAGE_TYPES = [
+  'image/jpeg',
+  'image/jpg',   // some Android cameras
+  'image/png',
+  'image/webp',
+  'image/heic',  // iOS camera
+  'image/heif',  // iOS camera
+  'application/octet-stream', // some Android cameras send this for photos
+];
 
 const DOC_TYPES = [
   'application/pdf',
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/octet-stream',
   'application/msword',                                                          // .doc
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',    // .docx
 ];
 
-const MAX_IMAGE_SIZE_MB = parseInt(process.env.MAX_IMAGE_SIZE_MB || '10');
-const MAX_DOC_SIZE_MB   = parseInt(process.env.MAX_DOC_SIZE_MB   || '20');
+const MAX_IMAGE_SIZE_MB = parseInt(process.env.MAX_IMAGE_SIZE_MB || '50');
+const MAX_DOC_SIZE_MB   = parseInt(process.env.MAX_DOC_SIZE_MB   || '50');
 
 // ─── Shared disk storage ──────────────────────────────────────
 const storage = multer.diskStorage({
@@ -99,7 +111,7 @@ const handleUploadErrors = (uploadMiddleware) => {
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return sendError(res, 400, ERROR_CODES.INVALID_FILE_TYPE,
-            `File too large. Maximum allowed size is ${MAX_IMAGE_SIZE_MB}MB per image / ${MAX_DOC_SIZE_MB}MB per document.`);
+            `File too large. Maximum allowed size is ${MAX_DOC_SIZE_MB}MB per file.`);
         }
         if (err.code === 'LIMIT_FILE_COUNT') {
           return sendError(res, 400, ERROR_CODES.TOO_MANY_IMAGES,
