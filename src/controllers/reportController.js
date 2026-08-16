@@ -1348,9 +1348,10 @@ const updateReport = async (req, res) => {
       }
     }
 
-    // Replace technical_reports/images if provided (merged — any file type)
+    // Replace technical_reports/images only when a non-empty array is provided
+    // An empty array or omitted field means "leave existing files unchanged"
     const fileUpdates = technical_reports || images;
-    if (Array.isArray(fileUpdates)) {
+    if (Array.isArray(fileUpdates) && fileUpdates.length > 0) {
       await dbClient.query('DELETE FROM technical_reports WHERE report_id = $1', [id]);
       for (const doc of fileUpdates) {
         if (!doc.file_name || !doc.file_url) continue;
