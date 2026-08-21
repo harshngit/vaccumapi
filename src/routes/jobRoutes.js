@@ -14,6 +14,7 @@ const {
   deleteJob,
   addJobImage,
   deleteJobImage,
+  checkTechnicianAvailability,
 } = require('../controllers/jobController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -208,6 +209,80 @@ router.post('/', protect, authorize('admin', 'manager', 'engineer'), createJob);
  *       404:
  *         description: Job not found
  */
+// ────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/jobs/technician-availability:
+ *   get:
+ *     summary: Check if one or more technicians are available on a given date
+ *     description: |
+ *       Returns each technician's active jobs on the requested date so you can
+ *       detect conflicts before assigning them to a new job.
+ *
+ *       A technician is **unavailable** if they have any non-Closed / non-Cancelled
+ *       job whose `scheduled_date`, `start_date`, or date range (`start_date` →
+ *       `end_date`) overlaps the requested date.
+ *
+ *       **Use before creating a job** — pass all candidate technician IDs and the
+ *       planned `scheduled_date` to surface conflicts up-front.
+ *     tags: [Jobs]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: technician_ids
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "1,2,5"
+ *         description: Comma-separated technician IDs to check
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *           example: "2026-08-20"
+ *         description: Date to check availability for (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Availability result per technician
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 date: { type: string, format: date }
+ *                 technicians:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       technician_id:   { type: integer }
+ *                       technician_name: { type: string }
+ *                       is_available:    { type: boolean }
+ *                       conflicting_jobs:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             job_id:         { type: string, example: JOB-0014 }
+ *                             title:          { type: string }
+ *                             status:         { type: string }
+ *                             category:       { type: string }
+ *                             client_name:    { type: string }
+ *                             scheduled_date: { type: string, format: date }
+ *                             start_date:     { type: string, format: date }
+ *                             end_date:       { type: string, format: date }
+ *       400:
+ *         description: Missing or invalid parameters
+ */
+router.get('/technician-availability', protect, checkTechnicianAvailability);
+
+// ────────────────────────────────────────────────────────────
+
 router.get('/:id', protect, getJobById);
 
 // ────────────────────────────────────────────────────────────

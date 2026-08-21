@@ -727,6 +727,116 @@ const deleteJobImage = async (req, res) => {
   }
 };
 
+// ────────────────────────────────────────────────────────────
+// GET /api/jobs/technician-availability
+// Check whether one or more technicians have jobs on a given date.
+// Query params:
+//   technician_ids  — comma-separated IDs, e.g. "1,2,5"  (required)
+//   date            — ISO date string, e.g. "2026-08-20"  (required)
+// ────────────────────────────────────────────────────────────
+const checkTechnicianAvailability = async (req, res) => {
+  try {
+    const { technician_ids, date } = req.query;
+
+    if (!technician_ids || !date) {
+      return sendError(res, 400, ERROR_CODES.MISSING_REQUIRED_FIELDS,
+        'Both technician_ids (comma-separated) and date are required.',
+        { missing_fields: [...(!technician_ids ? ['technician_ids'] : []), ...(!date ? ['date'] : [])] }
+      );
+    }
+
+    const ids = technician_ids
+      .split(',')
+      .map(id => parseInt(id.trim()))
+      .filter(id => !isNaN(id));
+
+    if (ids.length === 0) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'technician_ids must contain at least one valid integer ID.');
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return sendError(res, 400, ERROR_CODES.VALIDATION_ERROR,
+        'date must be in YYYY-MM-DD format.');
+    }
+
+    // Fetch technician names
+    const techResult = await pool.query(
+      `SELECT id, name FROM technicians WHERE id = ANY($1) ORDER BY id`,
+      [ids]
+    );
+
+    // Find conflicting jobs — any job where the technician is assigned
+    // and the requested date falls on or between the job's scheduled/start/end date
+    const conflictsResult = await pool.query(
+      `SELECT
+         jt.technician_id,
+         j.id         AS job_id,
+         j.title,
+         j.status,
+         j.category,
+         j.scheduled_date,
+         j.start_date,
+         j.end_date,
+         c.name       AS client_name
+       FROM job_technicians jt
+       JOIN jobs j    ON j.id  = jt.job_id
+       LEFT JOIN clients c ON c.id = j.client_id
+       WHERE jt.technician_id = ANY($1)
+         AND j.status NOT IN ('Closed', 'Cancelled')
+         AND (
+           j.scheduled_date = $2
+           OR j.start_date  = $2
+           OR ($2::date BETWEEN j.start_date AND j.end_date)
+         )
+       ORDER BY jt.technician_id, j.scheduled_date`,
+      [ids, date]
+    );
+
+    // Group conflicts by technician_id
+    const conflictMap = {};
+    for (const row of conflictsResult.rows) {
+      if (!conflictMap[row.technician_id]) conflictMap[row.technician_id] = [];
+      conflictMap[row.technician_id].push({
+        job_id:         row.job_id,
+        title:          row.title,
+        status:         row.status,
+        category:       row.category,
+        client_name:    row.client_name,
+        scheduled_date: row.scheduled_date,
+        start_date:     row.start_date,
+        end_date:       row.end_date,
+      });
+    }
+
+    // Build per-technician result
+    const technicians = techResult.rows.map(tech => {
+      const conflicts = conflictMap[tech.id] || [];
+      return {
+        technician_id:    tech.id,
+        technician_name:  tech.name,
+        is_available:     conflicts.length === 0,
+        conflicting_jobs: conflicts,
+      };
+    });
+
+    // Flag if any requested ID wasn't found in DB
+    const foundIds = new Set(techResult.rows.map(t => t.id));
+    const notFound = ids.filter(id => !foundIds.has(id));
+
+    return res.status(200).json({
+      success:   true,
+      date,
+      technicians,
+      ...(notFound.length > 0 && { not_found_ids: notFound }),
+    });
+
+  } catch (error) {
+    console.error('Check technician availability error:', error);
+    return Errors.internalError(res);
+  }
+};
+
 module.exports = {
   getJobs,
   getJobsByUser,
@@ -737,4 +847,5 @@ module.exports = {
   deleteJob,
   addJobImage,
   deleteJobImage,
+  checkTechnicianAvailability,
 };
